@@ -1,0 +1,98 @@
+{
+  "name": "minuta-digital-backend",
+  "version": "0.1.0",
+  "description": "Backend SaaS Multi-Tenant para la plataforma residencial Minuta Digital",
+  "author": "Minuta Digital",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/src/main",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "test": "jest",
+    "prisma:generate": "prisma generate --schema=prisma/central/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=prisma/central/schema.prisma",
+    "prisma:studio": "prisma studio --schema=prisma/central/schema.prisma"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": ".",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "tsconfig.spec.json" }]
+    },
+    "collectCoverageFrom": [
+      "src/**/*.(t|j)s"
+    ],
+    "coverageDirectory": "./coverage",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@app/(.*)$": "<rootDir>/src/$1",
+      "^@nestjs/common$": "<rootDir>/test/mocks/nestjs-common.mock.ts"
+    }
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.637.0",
+    "@aws-sdk/s3-request-presigner": "^3.637.0",
+    "@nestjs/common": "^12.0.1",
+    "@nestjs/config": "^12.0.0",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/jwt": "^12.0.1",
+    "@nestjs/passport": "^12.0.0",
+    "@nestjs/platform-express": "^12.0.1",
+    "@nestjs/platform-socket.io": "^12.0.1",
+    "@nestjs/swagger": "^12.0.1",
+    "@nestjs/websockets": "^12.0.1",
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
+    "bcrypt": "^5.1.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "dotenv": "^17.4.2",
+    "multer": "^2.3.0",
+    "nodemailer": "^10.0.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "pg": "^8.13.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.7.5",
+    "uuid": "^14.0.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.0",
+    "@nestjs/schematics": "^12.0.0",
+    "@nestjs/testing": "^12.0.1",
+    "@types/bcrypt": "^5.0.2",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20.16.5",
+    "@types/nodemailer": "^8.0.1",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "jest": "^29.7.0",
+    "prettier": "^3.3.3",
+    "prisma": "^7.0.0",
+    "source-map-support": "^0.5.21",
+    "ts-jest": "^29.2.5",
+    "ts-loader": "^9.5.1",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3"
+  }
+}

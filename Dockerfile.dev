@@ -1,0 +1,21 @@
+# ============================================================================
+# Dockerfile.dev - Minuta Digital Backend
+# ============================================================================
+FROM node:20-alpine
+
+WORKDIR /usr/src/app
+
+RUN apk add --no-cache openssl libc6-compat
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+# Generar únicamente el cliente de Prisma para la base de datos central unificada
+RUN npx prisma generate --schema=prisma/central/schema.prisma
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start:dev"]

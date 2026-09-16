@@ -1,0 +1,151 @@
+services:
+  # ==========================================================
+  # PostgreSQL 18 - Base de datos central unificada
+  # ==========================================================
+  postgres:
+    image: postgres:18-alpine
+    container_name: minuta_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-minuta_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-minuta_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-central_db}
+    ports:
+      - '5432:5432'
+    volumes:
+      # En Postgres 18+, el montaje se realiza en /var/lib/postgresql para soportar pg_ctlcluster
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-minuta_admin} -d ${POSTGRES_DB:-central_db}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - minuta_network
+
+  # ==========================================================
+  # MinIO - Almacenamiento de objetos compatible con S3
+  # ==========================================================
+  minio:
+    image: minio/minio
+    container_name: minuta_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minuta_access_key}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minuta_secret_key}
+    ports:
+      - '9000:9000' # API S3
+      - '9001:9001' # Consola de administración
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - minuta_network
+
+  # ==========================================================
+  # Creación automática del bucket en MinIO al iniciar
+  # ==========================================================
+  minio-init:
+    image: minio/mc
+    container_name: minuta_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until (mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minuta_access_key} ${MINIO_ROOT_PASSWORD:-minuta_secret_key}) do sleep 1; done;
+      mc mb --ignore-existing local/${S3_BUCKET:-minuta-bucket};
+      mc anonymous set download local/${S3_BUCKET:-minuta-bucket};
+      exit 0;
+      "
+    networks:
+      - minuta_network
+
+  # ==========================================================
+  # Mailpit - Servidor SMTP local para pruebas de correo
+  # ==========================================================
+  mailpit:
+    image: axllent/mailpit
+    container_name: minuta_mailpit
+    restart: unless-stopped
+    ports:
+      - '8025:8025' # UI Web
+      - '1025:1025' # Puerto SMTP
+    networks:
+      - minuta_network
+
+  # ==========================================================
+  # NestJS - API en modo desarrollo con hot-reload
+  # ==========================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: minuta_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-minuta_admin}:${POSTGRES_PASSWORD:-minuta_pass}@postgres:5432/${POSTGRES_DB:-central_db}?schema=public
+      CENTRAL_DATABASE_URL: postgresql://${POSTGRES_USER:-minuta_admin}:${POSTGRES_PASSWORD:-minuta_pass}@postgres:5432/${POSTGRES_DB:-central_db}?schema=public
+      S3_ENDPOINT: http://minio:9000
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/usr/src/app
+      - api_node_modules:/usr/src/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    command: >
+      sh -c "npx prisma migrate dev --name init --config=prisma.central.config.ts &&
+             npm run start:dev"
+    networks:
+      - minuta_network
+
+  # ==========================================================
+  # Prisma Studio - Inspección visual de la base de datos
+  # ==========================================================
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: minuta_prisma_studio
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-minuta_admin}:${POSTGRES_PASSWORD:-minuta_pass}@postgres:5432/${POSTGRES_DB:-central_db}?schema=public
+      CENTRAL_DATABASE_URL: postgresql://${POSTGRES_USER:-minuta_admin}:${POSTGRES_PASSWORD:-minuta_pass}@postgres:5432/${POSTGRES_DB:-central_db}?schema=public
+    ports:
+      - '5555:5555'
+    volumes:
+      - .:/usr/src/app
+      - api_node_modules:/usr/src/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: npx prisma studio --config=prisma.central.config.ts --port 5555 --browser none
+    networks:
+      - minuta_network
+
+networks:
+  minuta_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+  api_node_modules:

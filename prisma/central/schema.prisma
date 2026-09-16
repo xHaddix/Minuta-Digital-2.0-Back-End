@@ -1,0 +1,332 @@
+// ============================================================================
+// Minuta Digital - Prisma Schema (Central Unificado)
+// ----------------------------------------------------------------------------
+// Arquitectura Multi-Tenant: Pool de esquema compartido con columna discriminadora.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// 1. JERARQUÍA ORGANIZACIONAL
+// ============================================================================
+
+/// Empresa o constructora que administra múltiples conjuntos residenciales.
+model Organization {
+  id             String        @id @default(uuid()) @map("id")
+  name           String        @map("name")
+  urlLogo        String?       @map("url_logo")
+  documentTypeId String?       @map("document_type_id")
+  documentType   DocumentType? @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+  identification String?       @unique @map("identification")
+
+  contactEmail String   @map("contact_email")
+  contactPhone String?  @map("contact_phone")
+  status       Int      @default(1) @map("status")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  complexes ResidentialComplex[]
+  users     User[]
+
+  @@index([documentTypeId])
+  @@map("organizations")
+}
+
+/// Conjunto residencial (tenant) perteneciente a una organización.
+model ResidentialComplex {
+  id             String       @id @default(uuid()) @map("id")
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  urlLogo        String?      @map("url_logo")
+  name           String       @map("name")
+  slug           String       @unique @map("slug")
+  contactEmail   String       @map("contact_email")
+  contactPhone   String?      @map("contact_phone")
+  status         Int          @default(1) @map("status")
+  planCode       String       @default("BASIC") @map("plan_code")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  users          User[]
+  residents      Resident[]
+  visitors       Visitor[]
+  correspondence Correspondence[]
+  amenities      Amenity[]
+  pqrsTickets    PqrsTicket[]
+  marketplace    MarketplacePost[]
+
+  @@index([organizationId])
+  @@map("residential_complexes")
+}
+
+// ============================================================================
+// 2. CONTROL DE ACCESO Y CATÁLOGOS (RBAC)
+// ============================================================================
+
+/// Catálogo de tipos de documento de identidad (CC, CE, NIT, Pasaporte, etc.)
+model DocumentType {
+  id          String   @id @default(uuid()) @map("id")
+  code        String   @unique @map("code")
+  description String?  @map("description")
+  status      Int      @default(1) @map("status")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users         User[]
+  organizations Organization[]
+
+  @@map("document_types")
+}
+
+/// Catálogo de acciones y permisos del sistema.
+model Permission {
+  id          String   @id @default(uuid()) @map("id")
+  code        String   @unique @map("code")
+  description String?  @map("description")
+  module      String   @map("module")
+  status      Int      @default(1) @map("status")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+/// Roles del sistema (ROLE_DEV, ROLE_ORG_ADMIN, ROLE_COMPLEX_ADMIN, ROLE_SECURITY, ROLE_RESIDENT).
+model Role {
+  id          String   @id @default(uuid()) @map("id")
+  name        String   @map("name")
+  code        String   @unique @map("code")
+  description String?  @map("description")
+  status      Int      @default(1) @map("status")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+/// Tabla intermedia para la asignación de permisos a roles.
+model RolePermission {
+  id           String     @id @default(uuid()) @map("id")
+  roleId       String     @map("role_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  status       Int        @default(1) @map("status")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// ============================================================================
+// 3. GESTIÓN DE USUARIOS Y AUTENTICACIÓN
+// ============================================================================
+
+/// Tokens para activación de cuenta, invitaciones y recuperación de contraseña.
+model UserToken {
+  id        String   @id @default(uuid()) @map("id")
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique @map("token")
+  type      String   @map("type") // "ACTIVATION", "PASSWORD_RESET"
+  expiresAt DateTime @map("expires_at")
+  status    Int      @default(1) @map("status") // 1 = Activo/Pendiente, 0 = Usado/Revocado
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([token])
+  @@map("user_tokens")
+}
+
+/// Usuarios con soporte de jerarquía.
+model User {
+  id                   String              @id @default(uuid()) @map("id")
+  roleId               String              @map("role_id")
+  role                 Role                @relation(fields: [roleId], references: [id])
+  organizationId       String?             @map("organization_id")
+  organization         Organization?       @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  residentialComplexId String?             @map("residential_complex_id")
+  residentialComplex   ResidentialComplex? @relation(fields: [residentialComplexId], references: [id], onDelete: SetNull)
+
+  documentTypeId String?       @map("document_type_id")
+  documentType   DocumentType? @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+  documentNumber String?       @map("document_number")
+
+  imgProfile String?  @map("img_profile")
+  email      String   @unique @map("email")
+  password   String?  @map("password")
+  name       String   @map("name")
+  phone      String?  @map("phone")
+  status     Int      @default(2) @map("status") // 2 = Pendiente activación, 1 = Activo, 0 = Inactivo
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tokens                 UserToken[]
+  residents              Resident[]
+  authorizedVisitors     Visitor[]          @relation("AuthorizedBy")
+  deliveredCorrespondence Correspondence[]  @relation("DeliveredTo")
+  amenityBookings        AmenityBooking[]
+  pqrsTickets            PqrsTicket[]
+  marketplacePosts       MarketplacePost[]
+
+  @@index([residentialComplexId])
+  @@index([organizationId])
+  @@index([roleId])
+  @@index([documentTypeId])
+  @@map("users")
+}
+
+// ============================================================================
+// 4. MÓDULOS DE DOMINIO OPERATIVO (UNIFICADOS)
+// ============================================================================
+
+/// Residentes vinculados a una unidad habitacional y a un conjunto específico.
+model Resident {
+  id                   String             @id @default(uuid()) @map("id")
+  userId               String @map("user_id")
+  residentialComplexId String @map("residential_complex_id")
+  unitNumber           String             @map("unit_number") // Apto/Casa (ej: 101, Torre 2 Apto 504)
+  isOwner              Boolean            @default(false) @map("is_owner")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  residentialComplex ResidentialComplex @relation(fields: [residentialComplexId], references: [id], onDelete: Cascade)
+
+  @@index([residentialComplexId, unitNumber])
+  @@index([userId])
+  @@map("residents")
+}
+
+/// Registro de ingresos y salidas en minutas de seguridad.
+model Visitor {
+  id                   String             @id @default(uuid()) @map("id")
+  residentialComplexId String @map("residential_complex_id")
+  fullName             String             @map("full_name")
+  documentNumber       String             @map("document_number")
+  unitTarget           String             @map("unit_target")
+  entryTime            DateTime           @default(now()) @map("entry_time")
+  exitTime             DateTime?          @map("exit_time")
+  authorizerUserId     String? @map("authorizer_user_id")
+  createdAt            DateTime           @default(now()) @map("created_at")
+
+  residentialComplex ResidentialComplex @relation(fields: [residentialComplexId], references: [id], onDelete: Cascade)
+  authorizerUser     User?              @relation("AuthorizedBy", fields: [authorizerUserId], references: [id], onDelete: SetNull)
+
+  @@index([residentialComplexId, entryTime])
+  @@map("visitors")
+}
+
+/// Control de correspondencia y paquetería en portería.
+model Correspondence {
+  id                   String             @id @default(uuid()) @map("id")
+  residentialComplexId String @map("residential_complex_id")
+  recipientName        String             @map("recipient_name")
+  unitNumber           String             @map("unit_number")
+  carrier              String             // Ej: Servientrega, Amazon, DHL
+  status               String             @default("PENDING") @map("status") // PENDING, DELIVERED
+  receivedAt           DateTime           @default(now()) @map("received_at")
+  deliveredAt          DateTime?          @map("delivered_at")
+  deliveredToUserId    String? @map("delivered_to_user_id")
+
+  residentialComplex ResidentialComplex @relation(fields: [residentialComplexId], references: [id], onDelete: Cascade)
+  deliveredToUser    User?              @relation("DeliveredTo", fields: [deliveredToUserId], references: [id], onDelete: SetNull)
+
+  @@index([residentialComplexId, status])
+  @@map("correspondence")
+}
+
+/// Amenidades del conjunto (Salón social, BBQ, Gimnasio, etc.)
+model Amenity {
+  id                   String             @id @default(uuid()) @map("id")
+  residentialComplexId String @map("residential_complex_id")
+  name                 String             @map("name")
+  description          String?            @map("description")
+  capacity             Int                @default(10) @map("capacity")
+  requiresApproval     Boolean            @default(false) @map("requires_approval")
+  status               Int                @default(1) @map("status")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  residentialComplex ResidentialComplex @relation(fields: [residentialComplexId], references: [id], onDelete: Cascade)
+  bookings           AmenityBooking[]
+
+  @@index([residentialComplexId])
+  @@map("amenities")
+}
+
+/// Reservas de amenidades hechas por residentes.
+model AmenityBooking {
+  id                   String   @id @default(uuid()) @map("id")
+  amenityId            String @map("amenity_id")
+  userId               String @map("user_id")
+  bookingDate          DateTime @map("booking_date")
+  startTime            DateTime @map("start_time")
+  endTime              DateTime @map("end_time")
+  status               String   @default("PENDING") @map("status") // PENDING, APPROVED, REJECTED, CANCELLED
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  amenity Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([amenityId, bookingDate])
+  @@index([userId])
+  @@map("amenity_bookings")
+}
+
+/// Peticiones, Quejas, Reclamos y Sugerencias (PQRS).
+model PqrsTicket {
+  id                   String             @id @default(uuid()) @map("id")
+  residentialComplexId String @map("residential_complex_id")
+  userId               String @map("user_id")
+  ticketType           String             @map("ticket_type") // PETITION, COMPLAINT, CLAIM, SUGGESTION
+  subject              String             @map("subject")
+  description          String             @map("description")
+  status               String             @default("OPEN") @map("status") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  residentialComplex ResidentialComplex @relation(fields: [residentialComplexId], references: [id], onDelete: Cascade)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([residentialComplexId, status])
+  @@index([userId])
+  @@map("pqrs_tickets")
+}
+
+/// Mercado interno / Clasificados del conjunto residencial.
+model MarketplacePost {
+  id                   String             @id @default(uuid()) @map("id")
+  residentialComplexId String @map("residential_complex_id")
+  userId               String @map("user_id")
+  title                String             @map("title")
+  description          String             @map("description")
+  price                Decimal            @db.Decimal(10, 2) @map("price")
+  imageUrl             String?            @map("image_url")
+  status               String             @default("ACTIVE") @map("status") // ACTIVE, SOLD, INACTIVE
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  residentialComplex ResidentialComplex @relation(fields: [residentialComplexId], references: [id], onDelete: Cascade)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([residentialComplexId, status])
+  @@index([userId])
+  @@map("marketplace_posts")
+}
