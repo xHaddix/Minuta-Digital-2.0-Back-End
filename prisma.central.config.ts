@@ -7,6 +7,6 @@ import { defineConfig, env } from 'prisma/config';
 export default defineConfig({
   schema: 'prisma/central/schema.prisma',
   datasource: {
-    url: env('CENTRAL_DATABASE_URL'),
+    url: env('DATABASE_URL'),
   },
 });

@@ -8,8 +8,7 @@ export default registerAs('app', () => ({
     expiresIn: process.env.JWT_EXPIRES_IN ?? '1d',
   },
   database: {
-    centralUrl: process.env.CENTRAL_DATABASE_URL,
-    tenantBaseUrl: process.env.TENANT_DATABASE_BASE_URL,
+    centralUrl: process.env.DATABASE_URL,
   },
   storage: {
     endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',

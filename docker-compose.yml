@@ -93,7 +93,6 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-minuta_admin}:${POSTGRES_PASSWORD:-minuta_pass}@postgres:5432/${POSTGRES_DB:-central_db}?schema=public
-      CENTRAL_DATABASE_URL: postgresql://${POSTGRES_USER:-minuta_admin}:${POSTGRES_PASSWORD:-minuta_pass}@postgres:5432/${POSTGRES_DB:-central_db}?schema=public
       S3_ENDPOINT: http://minio:9000
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
@@ -128,7 +127,6 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-minuta_admin}:${POSTGRES_PASSWORD:-minuta_pass}@postgres:5432/${POSTGRES_DB:-central_db}?schema=public
-      CENTRAL_DATABASE_URL: postgresql://${POSTGRES_USER:-minuta_admin}:${POSTGRES_PASSWORD:-minuta_pass}@postgres:5432/${POSTGRES_DB:-central_db}?schema=public
     ports:
       - '5555:5555'
     volumes:
