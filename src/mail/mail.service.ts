@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
-import type { Transporter } from 'nodemailer';
+import { Resend } from 'resend';
 import { buildActivationEmailHtml } from './templates/activation-email.template';
 import { buildPasswordResetEmailHtml } from './templates/password-reset-email.template';
 
@@ -25,64 +24,39 @@ export interface SendPasswordResetEmailParams {
   expiresInMinutes?: number;
 }
 
-/**
- * Servicio de correo genérico y reutilizable, basado en Nodemailer.
- *
- * En entorno local se conecta a Mailpit (SMTP sin autenticación, sin TLS),
- * lo cual permite probar el envío de correos sin depender de un proveedor
- * externo. La configuración se lee exclusivamente de variables de entorno
- * a través de ConfigService, por lo que en producción basta con apuntar
- * SMTP_HOST/SMTP_PORT a un proveedor real (SendGrid, SES, etc.).
- */
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private readonly transporter: Transporter;
+  private readonly resend: Resend;
   private readonly mailFrom: string;
   private readonly frontendUrl: string;
 
   constructor(private readonly configService: ConfigService) {
     this.mailFrom = this.configService.get<string>(
       'app.mail.from',
-      'Minuta Digital <no-reply@minutadigital.local>',
+      'Minuta Digital <onboarding@resend.dev>', // Usa onboarding@resend.dev para pruebas
     );
     this.frontendUrl = this.configService.getOrThrow<string>('app.mail.frontendUrl');
 
-    const port = this.configService.get<number>('app.mail.port', 1025);
-    const secure = this.configService.get<boolean>('app.mail.secure', false) || port === 465;
-
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('app.mail.host', 'localhost'),
-      port,
-      secure,
-      // Fuerza la conexión por IPv4 para solucionar el error ENETUNREACH en Render
-      family: 4,
-      // Mailpit no requiere autenticación en local; en producción se puede
-      // habilitar completando SMTP_USER/SMTP_PASS.
-      auth: this.configService.get<string>('app.mail.user')
-        ? {
-            user: this.configService.get<string>('app.mail.user'),
-            pass: this.configService.get<string>('app.mail.pass'),
-          }
-        : undefined,
-    } as nodemailer.TransportOptions);
+    // Configura RESEND_API_KEY en tus variables de entorno de Render
+    const apiKey = this.configService.get<string>('RESEND_API_KEY');
+    this.resend = new Resend(apiKey);
   }
 
-  /**
-   * Envía un correo genérico en formato HTML. Los errores de envío se
-   * registran pero NUNCA deben interrumpir el flujo de negocio que los
-   * origina (p. ej. la creación de un usuario no debe fallar solo porque
-   * el correo de invitación no pudo enviarse).
-   */
   async sendMail({ to, subject, html }: SendMailOptions): Promise<void> {
     try {
-      await this.transporter.sendMail({
+      const { data, error } = await this.resend.emails.send({
         from: this.mailFrom,
-        to,
+        to: [to],
         subject,
         html,
       });
-      this.logger.log(`Correo enviado a ${to}: "${subject}"`);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Correo enviado a ${to}: "${subject}" (ID: ${data?.id})`);
     } catch (error) {
       this.logger.error(
         `Error enviando correo a ${to}: ${(error as Error).message}`,
@@ -92,10 +66,6 @@ export class MailService {
     }
   }
 
-  /**
-   * Construye el enlace de activación y envía el correo de invitación
-   * utilizando la plantilla HTML estilizada.
-   */
   async sendActivationEmail({
     to,
     name,
@@ -103,12 +73,7 @@ export class MailService {
     expiresInHours = 24,
   }: SendActivationEmailParams): Promise<void> {
     const activationUrl = `${this.frontendUrl}/auth/activate?token=${rawToken}`;
-
-    const html = buildActivationEmailHtml({
-      name,
-      activationUrl,
-      expiresInHours,
-    });
+    const html = buildActivationEmailHtml({ name, activationUrl, expiresInHours });
 
     await this.sendMail({
       to,
@@ -117,12 +82,6 @@ export class MailService {
     });
   }
 
-  /**
-   * Construye el enlace de recuperación de contraseña y envía el correo
-   * utilizando la plantilla HTML estilizada. El TTL es intencionalmente
-   * corto (por defecto 60 minutos) dado que es un flujo sensible de
-   * seguridad iniciado por el propio usuario.
-   */
   async sendPasswordResetEmail({
     to,
     name,
@@ -130,12 +89,7 @@ export class MailService {
     expiresInMinutes = 60,
   }: SendPasswordResetEmailParams): Promise<void> {
     const resetUrl = `${this.frontendUrl}/auth/reset-password?token=${rawToken}`;
-
-    const html = buildPasswordResetEmailHtml({
-      name,
-      resetUrl,
-      expiresInMinutes,
-    });
+    const html = buildPasswordResetEmailHtml({ name, resetUrl, expiresInMinutes });
 
     await this.sendMail({
       to,
