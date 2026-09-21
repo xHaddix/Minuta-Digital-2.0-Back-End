@@ -52,6 +52,8 @@ export class MailService {
       host: this.configService.get<string>('app.mail.host', 'localhost'),
       port: this.configService.get<number>('app.mail.port', 1025),
       secure: this.configService.get<boolean>('app.mail.secure', false),
+      // Fuerza la conexión por IPv4 para solucionar el error ENETUNREACH en Render
+      family: 4,
       // Mailpit no requiere autenticación en local; en producción se puede
       // habilitar completando SMTP_USER/SMTP_PASS.
       auth: this.configService.get<string>('app.mail.user')
@@ -60,7 +62,7 @@ export class MailService {
             pass: this.configService.get<string>('app.mail.pass'),
           }
         : undefined,
-    });
+    } as nodemailer.TransportOptions);
   }
 
   /**
@@ -79,7 +81,10 @@ export class MailService {
       });
       this.logger.log(`Correo enviado a ${to}: "${subject}"`);
     } catch (error) {
-      this.logger.error(`Error enviando correo a ${to}: ${(error as Error).message}`, (error as Error).stack);
+      this.logger.error(
+        `Error enviando correo a ${to}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
       throw error;
     }
   }
