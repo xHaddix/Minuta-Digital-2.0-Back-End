@@ -48,10 +48,13 @@ export class MailService {
     );
     this.frontendUrl = this.configService.getOrThrow<string>('app.mail.frontendUrl');
 
+    const port = this.configService.get<number>('app.mail.port', 1025);
+    const secure = this.configService.get<boolean>('app.mail.secure', false) || port === 465;
+
     this.transporter = nodemailer.createTransport({
       host: this.configService.get<string>('app.mail.host', 'localhost'),
-      port: this.configService.get<number>('app.mail.port', 1025),
-      secure: this.configService.get<boolean>('app.mail.secure', false),
+      port,
+      secure,
       // Fuerza la conexión por IPv4 para solucionar el error ENETUNREACH en Render
       family: 4,
       // Mailpit no requiere autenticación en local; en producción se puede
