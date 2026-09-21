@@ -19,11 +19,10 @@ export function buildPasswordResetEmailHtml({
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Recupera tu contraseña - Minuta Digital</title>
+      <title>Restablece tu contraseña - Minuta Digital</title>
       <style>
         @media only screen and (max-width: 620px) {
           .email-shell { width: 100% !important; }
-          .email-inner { width: 100% !important; }
           .email-content { padding-left: 20px !important; padding-right: 20px !important; }
           .email-title { font-size: 28px !important; }
           .email-body { font-size: 14px !important; }
@@ -50,27 +49,16 @@ export function buildPasswordResetEmailHtml({
                     ¿Olvidaste tu contraseña?
                   </div>
                   <p class="email-body" style="margin:0; color:#dfeaf6; font-size:15px; line-height:1.7;">
-                    Ingresa tu correo electrónico y te enviaremos un enlace de recuperación.
+                    Hola <strong style="color:#ffffff;">${escapeHtml(name)}</strong>, recibimos una solicitud para restablecer tu contraseña.
+                    Haz clic en el botón de abajo para continuar.
                   </p>
-                </td>
-              </tr>
-
-              <tr>
-                <td class="email-content" style="padding:26px 28px 0 28px;">
-                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:rgba(14,30,48,0.25); border:1px solid rgba(96,165,250,0.6); border-radius:12px;">
-                    <tr>
-                      <td style="padding:16px 18px; color:#e5f2ff; font-size:15px; font-weight:600;">
-                        ${escapeHtml(name)}
-                      </td>
-                    </tr>
-                  </table>
                 </td>
               </tr>
 
               <tr>
                 <td class="email-content" style="padding:26px 28px 10px 28px;">
                   <a href="${resetUrl}" class="email-button" style="display:block; width:100%; max-width:100%; box-sizing:border-box; text-align:center; text-decoration:none; color:#ffffff; font-size:18px; font-weight:700; border-radius:12px; background:linear-gradient(135deg, #3b82f6 0%, #6d5ef6 100%); padding:18px 20px; border:1px solid rgba(147,197,253,0.4);">
-                    Enviar enlace de recuperación
+                    Restablecer contraseña
                   </a>
                 </td>
               </tr>
