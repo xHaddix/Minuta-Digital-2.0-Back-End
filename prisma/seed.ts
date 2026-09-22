@@ -294,12 +294,16 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: 'admin@demo.minutadigital.com' },
-    update: {},
+    update: {
+      roleId: createdRoles['ROLE_ORG_ADMIN'].id,
+      organizationId: organization.id,
+      residentialComplexId: complex.id,
+    },
     create: {
       email: 'admin@demo.minutadigital.com',
       password: hashedPassword,
       name: 'Administrador Demo',
-      roleId: createdRoles['ROLE_COMPLEX_ADMIN'].id,
+      roleId: createdRoles['ROLE_ORG_ADMIN'].id,
       organizationId: organization.id,
       residentialComplexId: complex.id,
       status: UserStatus.ACTIVE,
@@ -311,6 +315,7 @@ async function main() {
     { code: 'CC', description: 'Cédula de ciudadanía' },
     { code: 'CE', description: 'Cédula de extranjería' },
     { code: 'PP', description: 'Pasaporte' },
+    { code: 'NIT', description: 'Número de Identificación Tributaria' },
   ];
 
   for (const doc of documentTypes) {

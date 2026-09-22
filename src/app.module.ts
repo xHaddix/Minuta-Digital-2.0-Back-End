@@ -15,6 +15,7 @@ import { MarketplaceModule } from './marketplace/marketplace.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { ResidentialComplexesModule } from './residential-complexes/residential-complexes.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
     MarketplaceModule,
     WebhooksModule,
     OrganizationsModule,
+    ResidentialComplexesModule,
   ],
 })
 export class AppModule {}
