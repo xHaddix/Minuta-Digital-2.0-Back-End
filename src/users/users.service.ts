@@ -1,7 +1,10 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService, Prisma } from '../prisma/prisma.service';
@@ -39,12 +42,17 @@ const USER_PUBLIC_SELECT = {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly userHierarchy: UserHierarchyService,
   ) {}
 
+  /**
+   * Obtiene la lista de usuarios acotada estrictamente por el ámbito (scope) del solicitante.
+   */
   findAll(requester: JwtPayload) {
     return this.prisma.user.findMany({
       where: this.scopeWhereClause(requester),
@@ -53,6 +61,9 @@ export class UsersService {
     });
   }
 
+  /**
+   * Obtiene un usuario específico garantizando el aislamiento de ámbito multi-tenant.
+   */
   async findOne(requester: JwtPayload, id: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, ...this.scopeWhereClause(requester) },
@@ -63,9 +74,18 @@ export class UsersService {
     return user;
   }
 
+  /**
+   * Ejecuta el flujo transaccional de invitación de usuario.
+   * - Registra el usuario en estado PENDING y su token hasheado dentro de una transacción de BD.
+   * - Envía el correo electrónico de activación.
+   * - En caso de fallo en el proveedor de correo, realiza una eliminación compensatoria del usuario
+   *   para evitar registros "fantasma" y bloqueos por duplicidad de email en intentos posteriores.
+   */
   async inviteUser(dto: InviteUserDto, requester: JwtPayload): Promise<InviteUserResponseDto> {
     const rawToken = generateSecureToken();
+    const cleanEmail = dto.email.toLowerCase().trim();
 
+    // 1. Transacción de Persistencia en Base de Datos
     const newUser = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const hierarchy = await this.userHierarchy.resolve(
         {
@@ -78,27 +98,31 @@ export class UsersService {
 
       this.userHierarchy.assertRequesterCanAssign(requester, hierarchy);
 
-      const existingUser = await tx.user.findUnique({ where: { email: dto.email } });
+      const existingUser = await tx.user.findUnique({
+        where: { email: cleanEmail },
+      });
+
       if (existingUser) {
         throw new ConflictException('Ya existe un usuario registrado con ese correo electrónico');
       }
 
       const user = await tx.user.create({
         data: {
-          email: dto.email,
-          name: dto.name,
-          phone: dto.phone,
+          email: cleanEmail,
+          name: dto.name.trim(),
+          phone: dto.phone?.trim(),
           roleId: hierarchy.roleId,
           organizationId: hierarchy.organizationId,
           residentialComplexId: hierarchy.residentialComplexId,
           documentTypeId: dto.documentTypeId,
-          documentNumber: dto.documentNumber,
+          documentNumber: dto.documentNumber?.trim(),
           password: null,
           status: UserStatus.PENDING,
         },
       });
 
       const expiresAt = new Date(Date.now() + ACTIVATION_TOKEN_TTL_HOURS * 60 * 60 * 1000);
+
       await tx.userToken.create({
         data: {
           userId: user.id,
@@ -112,12 +136,29 @@ export class UsersService {
       return user;
     });
 
-    await this.mailService.sendActivationEmail({
-      to: newUser.email,
-      name: newUser.name,
-      rawToken,
-      expiresInHours: ACTIVATION_TOKEN_TTL_HOURS,
-    });
+    // 2. Envío de Correo Electrónico con Manejo Explicito de Excepciones
+    try {
+      await this.mailService.sendActivationEmail({
+        to: newUser.email,
+        name: newUser.name,
+        rawToken,
+        expiresInHours: ACTIVATION_TOKEN_TTL_HOURS,
+      });
+    } catch (mailError) {
+      this.logger.error(
+        `Fallo al enviar correo de activación a "${newUser.email}". Eliminando registro ID ${newUser.id} para mantener consistencia.`,
+        mailError instanceof Error ? mailError.stack : mailError,
+      );
+
+      // Eliminación compensatoria (Rollback explícito del efecto secundario)
+      await this.prisma.user.delete({
+        where: { id: newUser.id },
+      });
+
+      throw new BadRequestException(
+        `No se pudo entregar el correo de activación a "${newUser.email}". Verifique que la dirección de correo exista y esté correctamente escrita.`,
+      );
+    }
 
     return {
       message: 'Usuario invitado exitosamente. Se envió un correo con el enlace de activación.',
@@ -131,7 +172,7 @@ export class UsersService {
   }
 
   /**
-   * Construye el filtro WHERE blindado que acota las consultas al alcance del usuario.
+   * Construye el filtro WHERE blindado que acota las consultas al alcance (scope) del solicitante.
    */
   private scopeWhereClause(requester: JwtPayload): Prisma.UserWhereInput {
     if (requester.roleCode === RoleCode.DEV) {
