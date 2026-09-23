@@ -3,7 +3,6 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +10,7 @@ import { PrismaService, Prisma } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { UserHierarchyService } from './user-hierarchy.service';
 import { InviteUserDto } from './dto/invite-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { InviteUserResponseDto } from './dto/invite-user-response.dto';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { generateSecureToken, hashToken } from '../common/utils/token.util';
@@ -169,6 +169,90 @@ export class UsersService {
         status: newUser.status,
       },
     };
+  }
+
+  /**
+   * Actualiza la información de un usuario respetando las reglas de jerarquía y scope multi-tenant.
+   */
+  async update(id: string, dto: UpdateUserDto, requester: JwtPayload) {
+    // 1. Buscar usuario garantizando que pertenece al scope del solicitante
+    const existingUser = await this.prisma.user.findFirst({
+      where: { id, ...this.scopeWhereClause(requester) },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    // 2. Prevenir auto-modificación de estado que pueda dejar la sesión inhabilitada
+    if (requester.sub === id && dto.status !== undefined && dto.status !== existingUser.status) {
+      throw new BadRequestException('No puedes cambiar tu propio estado de usuario');
+    }
+
+    // 3. Validar jerarquía de asignación si se intenta reasignar el rol
+    if (dto.roleId && dto.roleId !== existingUser.roleId) {
+      const hierarchy = await this.userHierarchy.resolve({
+        roleId: dto.roleId,
+        organizationId: existingUser.organizationId,
+        residentialComplexId: existingUser.residentialComplexId,
+      });
+
+      this.userHierarchy.assertRequesterCanAssign(requester, hierarchy);
+    }
+
+    // 4. Actualización atómica del usuario
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(dto.name && { name: dto.name.trim() }),
+        ...(dto.phone !== undefined && { phone: dto.phone?.trim() }),
+        ...(dto.roleId && { roleId: dto.roleId }),
+        ...(dto.documentTypeId !== undefined && { documentTypeId: dto.documentTypeId }),
+        ...(dto.documentNumber !== undefined && { documentNumber: dto.documentNumber?.trim() }),
+        ...(dto.status !== undefined && { status: dto.status }),
+      },
+      select: USER_PUBLIC_SELECT,
+    });
+
+    return updatedUser;
+  }
+
+  /**
+   * Aplica borrado definitivo (Hard Delete) si el usuario está PENDING o desactiva (Soft Delete) si ya estuvo activo.
+   */
+  async remove(id: string, requester: JwtPayload) {
+    // 1. Verificar existencia del usuario dentro del scope permitido
+    const user = await this.prisma.user.findFirst({
+      where: { id, ...this.scopeWhereClause(requester) },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    // 2. Prevenir auto-eliminación/desactivación
+    if (requester.sub === id) {
+      throw new BadRequestException('No puedes eliminar tu propia cuenta de usuario');
+    }
+
+    // 3. Estrategia Híbrida según estado operativo del usuario
+    if (user.status === UserStatus.PENDING) {
+      // Hard Delete atómico: limpia tokens de activación y el usuario sin violar FKs
+      await this.prisma.$transaction([
+        this.prisma.userToken.deleteMany({ where: { userId: id } }),
+        this.prisma.user.delete({ where: { id } }),
+      ]);
+
+      return { message: 'Usuario en estado pendiente eliminado exitosamente' };
+    }
+
+    // Soft Delete: Desactivación lógica para preservar integridad referencial de minutas e historial
+    await this.prisma.user.update({
+      where: { id },
+      data: { status: UserStatus.INACTIVE },
+    });
+
+    return { message: 'Usuario desactivado exitosamente' };
   }
 
   /**
