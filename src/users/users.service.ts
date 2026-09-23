@@ -27,10 +27,14 @@ const USER_PUBLIC_SELECT = {
   status: true,
   organizationId: true,
   residentialComplexId: true,
-  documentTypeId: true,
   documentNumber: true,
   createdAt: true,
-  role: { select: { id: true, code: true, name: true } },
+  role: {
+    select: { id: true, code: true, name: true },
+  },
+  documentType: {
+    select: { id: true, code: true, description: true },
+  },
 } as const;
 
 @Injectable()
