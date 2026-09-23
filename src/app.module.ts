@@ -16,6 +16,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ResidentialComplexesModule } from './residential-complexes/residential-complexes.module';
+import { DocumentTypesModule } from './document-types/document-types.module';
+import { RolesModule } from './roles/roles.module';
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { ResidentialComplexesModule } from './residential-complexes/residential-
     WebhooksModule,
     OrganizationsModule,
     ResidentialComplexesModule,
+    DocumentTypesModule,
+    RolesModule,
   ],
 })
 export class AppModule {}

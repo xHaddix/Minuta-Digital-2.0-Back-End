@@ -10,60 +10,76 @@ import { RoleCode } from '../common/constants/role.constants';
 import { CreateResidentialComplexDto } from './dto/create-residential-complex.dto';
 import { UpdateResidentialComplexDto } from './dto/update-residential-complex.dto';
 
+const RESIDENTIAL_COMPLEX_PUBLIC_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  organizationId: true,
+  urlLogo: true,
+  contactEmail: true,
+  contactPhone: true,
+  status: true,
+  planCode: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 @Injectable()
 export class ResidentialComplexesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(requester: JwtPayload) {
-    if (requester.roleCode !== RoleCode.DEV && requester.roleCode !== RoleCode.ORG_ADMIN) {
-      throw new ForbiddenException(
-        'Solo un desarrollador o administrador de organización puede listar conjuntos',
-      );
+  /**
+   * Lista conjuntos residenciales acotados según la jerarquía RBAC del solicitante.
+   * - ROLE_DEV: Lista todos o filtra por organizationId opcional.
+   * - ROLE_ORG_ADMIN: Lista únicamente conjuntos de su organización.
+   * - Roles de Conjunto: Ven únicamente su propio conjunto.
+   */
+  async findAll(requester: JwtPayload, organizationIdQuery?: string) {
+    const where: Prisma.ResidentialComplexWhereInput = { status: 1 };
+
+    switch (requester.roleCode) {
+      case RoleCode.DEV:
+        if (organizationIdQuery) {
+          where.organizationId = organizationIdQuery;
+        }
+        break;
+
+      case RoleCode.ORG_ADMIN:
+        if (!requester.organizationId) {
+          throw new ForbiddenException(
+            'El administrador de organización no tiene una organización asignada',
+          );
+        }
+        where.organizationId = requester.organizationId;
+        break;
+
+      case RoleCode.COMPLEX_ADMIN:
+      case RoleCode.SECURITY:
+      case RoleCode.RESIDENT:
+        if (!requester.residentialComplexId) {
+          throw new ForbiddenException('Debe seleccionar un conjunto residencial activo');
+        }
+        where.id = requester.residentialComplexId;
+        break;
+
+      default:
+        throw new ForbiddenException('No tiene permisos para listar conjuntos residenciales');
     }
 
-    const where: Prisma.ResidentialComplexWhereInput =
-      requester.roleCode === RoleCode.ORG_ADMIN && requester.organizationId
-        ? { organizationId: requester.organizationId }
-        : {};
-
     return this.prisma.residentialComplex.findMany({
-      where: { ...where, status: 1 },
+      where,
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        organizationId: true,
-        urlLogo: true,
-        contactEmail: true,
-        contactPhone: true,
-        status: true,
-        planCode: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: RESIDENTIAL_COMPLEX_PUBLIC_SELECT,
     });
   }
 
   async findOne(requester: JwtPayload, id: string) {
-    if (requester.roleCode !== RoleCode.DEV && requester.roleCode !== RoleCode.ORG_ADMIN) {
-      throw new ForbiddenException('No tiene permisos para consultar conjuntos residenciales');
-    }
+    this.assertCanAccessComplex(requester, id);
 
     const complex = await this.prisma.residentialComplex.findFirst({
       where: { id, status: 1 },
       select: {
-        id: true,
-        name: true,
-        slug: true,
-        organizationId: true,
-        urlLogo: true,
-        contactEmail: true,
-        contactPhone: true,
-        status: true,
-        planCode: true,
-        createdAt: true,
-        updatedAt: true,
+        ...RESIDENTIAL_COMPLEX_PUBLIC_SELECT,
         organization: {
           select: {
             id: true,
@@ -73,11 +89,12 @@ export class ResidentialComplexesService {
       },
     });
 
-    if (!complex) throw new NotFoundException('Conjunto residencial no encontrado o inactivo');
+    if (!complex) {
+      throw new NotFoundException('Conjunto residencial no encontrado o inactivo');
+    }
 
     if (
       requester.roleCode === RoleCode.ORG_ADMIN &&
-      requester.organizationId &&
       complex.organizationId !== requester.organizationId
     ) {
       throw new ForbiddenException('Solo puedes consultar conjuntos de tu propia organización');
@@ -87,8 +104,7 @@ export class ResidentialComplexesService {
   }
 
   async create(dto: CreateResidentialComplexDto, requester?: JwtPayload) {
-    const organizationId =
-      requester?.roleCode === RoleCode.ORG_ADMIN ? requester.organizationId : dto.organizationId;
+    let targetOrganizationId = dto.organizationId;
 
     if (requester?.roleCode === RoleCode.ORG_ADMIN) {
       if (!requester.organizationId) {
@@ -100,14 +116,16 @@ export class ResidentialComplexesService {
       if (dto.organizationId && dto.organizationId !== requester.organizationId) {
         throw new ForbiddenException('Solo puedes crear conjuntos para tu propia organización');
       }
+
+      targetOrganizationId = requester.organizationId;
     }
 
-    if (!organizationId) {
+    if (!targetOrganizationId) {
       throw new BadRequestException('organizationId es obligatorio para el rol indicado');
     }
 
     const organization = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
+      where: { id: targetOrganizationId },
     });
     if (!organization) {
       throw new NotFoundException('La organización indicada no existe');
@@ -123,7 +141,6 @@ export class ResidentialComplexesService {
     const duplicateContact = await this.prisma.residentialComplex.findFirst({
       where: { contactEmail: dto.contactEmail },
     });
-
     if (duplicateContact) {
       throw new BadRequestException('Ya existe un conjunto residencial con ese correo de contacto');
     }
@@ -134,25 +151,14 @@ export class ResidentialComplexesService {
       data: {
         name: dto.name,
         slug: dto.slug,
-        organizationId,
+        organizationId: targetOrganizationId,
         urlLogo,
         contactEmail: dto.contactEmail,
         contactPhone: dto.contactPhone,
         planCode: dto.planCode ?? 'BASIC',
         status: 1,
       },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        organizationId: true,
-        urlLogo: true,
-        contactEmail: true,
-        contactPhone: true,
-        status: true,
-        planCode: true,
-        createdAt: true,
-      },
+      select: RESIDENTIAL_COMPLEX_PUBLIC_SELECT,
     });
   }
 
@@ -170,7 +176,6 @@ export class ResidentialComplexesService {
 
     if (
       requester.roleCode === RoleCode.ORG_ADMIN &&
-      requester.organizationId &&
       complex.organizationId !== requester.organizationId
     ) {
       throw new ForbiddenException('Solo puedes actualizar conjuntos de tu propia organización');
@@ -234,17 +239,7 @@ export class ResidentialComplexesService {
         ...(dto.contactPhone !== undefined && { contactPhone: dto.contactPhone }),
         ...(dto.planCode && { planCode: dto.planCode }),
       },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        organizationId: true,
-        contactEmail: true,
-        contactPhone: true,
-        status: true,
-        planCode: true,
-        updatedAt: true,
-      },
+      select: RESIDENTIAL_COMPLEX_PUBLIC_SELECT,
     });
   }
 
@@ -253,7 +248,9 @@ export class ResidentialComplexesService {
       throw new ForbiddenException('Solo un desarrollador puede eliminar conjuntos residenciales');
     }
 
-    const complex = await this.prisma.residentialComplex.findUnique({ where: { id } });
+    const complex = await this.prisma.residentialComplex.findUnique({
+      where: { id },
+    });
     if (!complex) {
       throw new NotFoundException('Conjunto residencial no encontrado');
     }
@@ -262,11 +259,16 @@ export class ResidentialComplexesService {
       where: { id },
       data: { status: 0 },
     });
+
     return { message: 'Conjunto residencial desactivado correctamente', id };
   }
 
   async getUsersByComplex(id: string, requester: JwtPayload) {
-    if (requester.roleCode !== RoleCode.DEV && requester.roleCode !== RoleCode.ORG_ADMIN) {
+    if (
+      requester.roleCode !== RoleCode.DEV &&
+      requester.roleCode !== RoleCode.ORG_ADMIN &&
+      requester.roleCode !== RoleCode.COMPLEX_ADMIN
+    ) {
       throw new ForbiddenException('No tiene permisos para consultar usuarios del conjunto');
     }
 
@@ -279,11 +281,16 @@ export class ResidentialComplexesService {
 
     if (
       requester.roleCode === RoleCode.ORG_ADMIN &&
-      requester.organizationId &&
       complex.organizationId !== requester.organizationId
     ) {
       throw new ForbiddenException(
         'Solo puedes consultar usuarios de conjuntos de tu propia organización',
+      );
+    }
+
+    if (requester.roleCode === RoleCode.COMPLEX_ADMIN && id !== requester.residentialComplexId) {
+      throw new ForbiddenException(
+        'Solo puedes consultar usuarios de tu propio conjunto residencial',
       );
     }
 
@@ -299,5 +306,25 @@ export class ResidentialComplexesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /**
+   * Helper privado para validar acceso básico por jerarquía a un conjunto.
+   */
+  private assertCanAccessComplex(requester: JwtPayload, complexId: string) {
+    if (
+      requester.roleCode !== RoleCode.DEV &&
+      requester.roleCode !== RoleCode.ORG_ADMIN &&
+      requester.roleCode !== RoleCode.COMPLEX_ADMIN
+    ) {
+      throw new ForbiddenException('No tiene permisos para consultar este conjunto residencial');
+    }
+
+    if (
+      requester.roleCode === RoleCode.COMPLEX_ADMIN &&
+      complexId !== requester.residentialComplexId
+    ) {
+      throw new ForbiddenException('Solo puedes consultar la información de tu propio conjunto');
+    }
   }
 }
