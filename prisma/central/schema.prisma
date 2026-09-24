@@ -187,6 +187,7 @@ model User {
   tokens                 UserToken[]
   residents              Resident[]
   authorizedVisitors     Visitor[]          @relation("AuthorizedBy")
+  createdVisitors        Visitor[]          @relation("CreatedVisitors")
   deliveredCorrespondence Correspondence[]  @relation("DeliveredTo")
   amenityBookings        AmenityBooking[]
   pqrsTickets            PqrsTicket[]
@@ -228,17 +229,21 @@ model Visitor {
   id                   String             @id @default(uuid()) @map("id")
   residentialComplexId String @map("residential_complex_id")
   fullName             String             @map("full_name")
-  documentNumber       String             @map("document_number")
-  unitTarget           String             @map("unit_target")
+  documentNumber       String?            @map("document_number")
+  documentType         String?            @map("document_type")
+  unitTarget           String?            @map("unit_target")
   entryTime            DateTime           @default(now()) @map("entry_time")
   exitTime             DateTime?          @map("exit_time")
+  createdById          String             @map("created_by_id")
   authorizerUserId     String? @map("authorizer_user_id")
   createdAt            DateTime           @default(now()) @map("created_at")
 
   residentialComplex ResidentialComplex @relation(fields: [residentialComplexId], references: [id], onDelete: Cascade)
+  createdBy          User               @relation("CreatedVisitors", fields: [createdById], references: [id], onDelete: Restrict)
   authorizerUser     User?              @relation("AuthorizedBy", fields: [authorizerUserId], references: [id], onDelete: SetNull)
 
-  @@index([residentialComplexId, entryTime])
+  @@index([residentialComplexId])
+  @@index([residentialComplexId, exitTime])
   @@map("visitors")
   @@schema("public")
 }

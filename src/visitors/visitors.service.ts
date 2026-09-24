@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { RegisterVisitorEntryDto } from './dto/register-visitor-entry.dto';
@@ -10,18 +10,20 @@ export class VisitorsService {
     private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
-  findAll(residentialComplexId: string) {
-    return this.prisma.visitor.findMany({
+  async findAll(residentialComplexId: string) {
+    const visitors = await this.prisma.visitor.findMany({
       where: { residentialComplexId },
       orderBy: { entryTime: 'desc' },
       select: {
         id: true,
         fullName: true,
         documentNumber: true,
+        documentType: true,
         unitTarget: true,
         entryTime: true,
         exitTime: true,
-        authorizerUser: {
+        createdAt: true,
+        createdBy: {
           select: {
             id: true,
             name: true,
@@ -30,41 +32,44 @@ export class VisitorsService {
         },
       },
     });
+
+    return visitors.map((visitor) => ({
+      ...visitor,
+      status: visitor.exitTime ? 'closed' : 'active',
+      authorizerUser: visitor.createdBy,
+    }));
   }
 
-  async registerEntry(residentialComplexId: string, dto: RegisterVisitorEntryDto) {
-    // Si se envía authorizerUserId, validar que el usuario exista
-    if (dto.authorizerUserId) {
-      const authorizer = await this.prisma.user.findFirst({
-        where: { id: dto.authorizerUserId, residentialComplexId },
-      });
-      if (!authorizer) {
-        throw new NotFoundException(
-          'El usuario autorizador no pertenece a este conjunto residencial',
-        );
-      }
-    }
-
+  async registerEntry(
+    residentialComplexId: string,
+    createdById: string,
+    dto: RegisterVisitorEntryDto,
+  ) {
     const visitor = await this.prisma.visitor.create({
       data: {
         residentialComplexId,
+        createdById,
         fullName: dto.fullName,
         documentNumber: dto.documentNumber,
+        documentType: dto.documentType,
         unitTarget: dto.unitTarget,
-        authorizerUserId: dto.authorizerUserId,
       },
       select: {
         id: true,
         fullName: true,
         documentNumber: true,
+        documentType: true,
         unitTarget: true,
         entryTime: true,
+        exitTime: true,
+        createdAt: true,
       },
     });
 
-    this.notificationsGateway.emitVisitorEntry(residentialComplexId, visitor);
+    const payload = { ...visitor, status: 'active' as const };
+    this.notificationsGateway.emitVisitorUpdated(residentialComplexId, payload);
 
-    return visitor;
+    return payload;
   }
 
   async registerExit(residentialComplexId: string, id: string) {
@@ -81,16 +86,25 @@ export class VisitorsService {
       throw new BadRequestException('El visitante ya registra un horario de salida previo');
     }
 
-    return this.prisma.visitor.update({
+    const updatedVisitor = await this.prisma.visitor.update({
       where: { id },
       data: { exitTime: new Date() },
       select: {
         id: true,
+        residentialComplexId: true,
         fullName: true,
+        documentNumber: true,
+        documentType: true,
         unitTarget: true,
         entryTime: true,
         exitTime: true,
+        createdAt: true,
       },
     });
+
+    const payload = { ...updatedVisitor, status: 'closed' as const };
+    this.notificationsGateway.emitVisitorUpdated(residentialComplexId, payload);
+
+    return payload;
   }
 }

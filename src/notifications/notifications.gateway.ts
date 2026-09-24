@@ -89,7 +89,11 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   /** Notifica el ingreso de un visitante en portería. */
   emitVisitorEntry(residentialComplexId: string, payload: unknown) {
-    this.server.to(this.roomForComplex(residentialComplexId)).emit('visitor:entry', payload);
+    this.emitVisitorUpdated(residentialComplexId, payload);
+  }
+
+  emitVisitorUpdated(residentialComplexId: string, payload: unknown) {
+    this.server.to(this.roomForComplex(residentialComplexId)).emit('visitor_updated', payload);
   }
 
   /** Notifica actualizaciones de estado en tickets PQRS. */
