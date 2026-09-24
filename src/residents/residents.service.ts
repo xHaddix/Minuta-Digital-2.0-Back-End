@@ -121,6 +121,27 @@ export class ResidentsService {
     });
   }
 
+  async unassignApartment(residentialComplexId: string, residentId: string) {
+    const resident = await this.prisma.resident.findFirst({
+      where: { id: residentId, residentialComplexId },
+    });
+
+    if (!resident) {
+      throw new NotFoundException('Residente no encontrado en el conjunto activo');
+    }
+
+    return this.prisma.resident.update({
+      where: { id: residentId },
+      data: { apartmentId: null, unitNumber: 'SIN ASIGNAR' },
+      select: {
+        id: true,
+        apartmentId: true,
+        unitNumber: true,
+        isOwner: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+  }
   async assignApartment(residentialComplexId: string, residentId: string, apartmentId: string) {
     const resident = await this.prisma.resident.findFirst({
       where: { id: residentId, residentialComplexId },

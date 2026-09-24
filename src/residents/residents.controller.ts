@@ -1,3 +1,4 @@
+import { Delete } from '@nestjs/common';
 import {
   Body,
   Controller,
@@ -52,6 +53,18 @@ export class ResidentsController {
     return this.residentsService.findOne(residentialComplexId, id);
   }
 
+  @Delete(':id/apartment')
+  @Roles('ROLE_DEV', 'ROLE_ORG_ADMIN', 'ROLE_COMPLEX_ADMIN')
+  @ApiOperation({ summary: 'Retira un residente del apartamento del conjunto activo' })
+  unassignApartment(
+    @CurrentUser('residentialComplexId') residentialComplexId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    if (!residentialComplexId) {
+      throw new BadRequestException('Debe seleccionar un conjunto residencial activo');
+    }
+    return this.residentsService.unassignApartment(residentialComplexId, id);
+  }
   @Post()
   @Roles('ROLE_DEV', 'ROLE_ORG_ADMIN', 'ROLE_COMPLEX_ADMIN')
   @ApiOperation({ summary: 'Registra un nuevo residente en el conjunto' })
