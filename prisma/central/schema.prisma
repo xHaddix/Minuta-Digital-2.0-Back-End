@@ -57,6 +57,7 @@ model ResidentialComplex {
 
   users          User[]
   residents      Resident[]
+  apartments     Apartment[]
   visitors       Visitor[]
   correspondence Correspondence[]
   amenities      Amenity[]
@@ -204,6 +205,26 @@ model User {
 // ============================================================================
 // 4. MÓDULOS DE DOMINIO OPERATIVO (UNIFICADOS)
 // ============================================================================
+
+/// Unidades habitacionales disponibles dentro de un conjunto residencial.
+model Apartment {
+  id                   String             @id @default(uuid()) @map("id")
+  residentialComplexId String             @map("residential_complex_id")
+  unitNumber           String             @map("unit_number")
+  tower                String?            @map("tower")
+  apartmentNumber      String?            @map("apartment_number")
+  unitType             String             @default("APARTMENT") @map("unit_type")
+  status               Int                @default(1) @map("status")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  residentialComplex ResidentialComplex @relation(fields: [residentialComplexId], references: [id], onDelete: Cascade)
+
+  @@unique([residentialComplexId, unitNumber])
+  @@index([residentialComplexId, status])
+  @@map("apartments")
+  @@schema("public")
+}
 
 /// Residentes vinculados a una unidad habitacional y a un conjunto específico.
 model Resident {

@@ -7,6 +7,7 @@ import { MailModule } from './mail/mail.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ResidentsModule } from './residents/residents.module';
+import { ApartmentsModule } from './apartments/apartments.module';
 import { VisitorsModule } from './visitors/visitors.module';
 import { CorrespondenceModule } from './correspondence/correspondence.module';
 import { AmenitiesModule } from './amenities/amenities.module';
@@ -33,6 +34,7 @@ import { RolesModule } from './roles/roles.module';
     AuthModule,
     UsersModule,
     ResidentsModule,
+    ApartmentsModule,
     VisitorsModule,
     CorrespondenceModule,
     AmenitiesModule,
