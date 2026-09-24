@@ -13,4 +13,5 @@ class AuthUserDto {
 export class AuthResponseDto {
   @ApiProperty() accessToken!: string;
   @ApiProperty({ type: AuthUserDto }) user!: AuthUserDto;
+  @ApiProperty({ type: [String] }) permissions!: string[];
 }

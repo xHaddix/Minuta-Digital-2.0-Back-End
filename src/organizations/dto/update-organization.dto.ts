@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
+import { IsEmail, IsOptional, IsString, IsUUID, Length } from 'class-validator';
 
 export class UpdateOrganizationDto {
   @ApiPropertyOptional({ example: 'Conjunto Los Pinos' })

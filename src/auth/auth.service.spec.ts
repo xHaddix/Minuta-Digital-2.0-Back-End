@@ -20,6 +20,7 @@ describe('AuthService (QA funcional)', () => {
   let service: AuthService;
   let prisma: {
     user: { findUnique: jest.Mock; update: jest.Mock };
+    role: { findUnique: jest.Mock };
     userToken: {
       findUnique: jest.Mock;
       update: jest.Mock;
@@ -39,6 +40,7 @@ describe('AuthService (QA funcional)', () => {
 
     prisma = {
       user: { findUnique: jest.fn(), update: jest.fn() },
+      role: { findUnique: jest.fn() },
       userToken: {
         findUnique: jest.fn(),
         update: jest.fn(),
@@ -199,14 +201,25 @@ describe('AuthService (QA funcional)', () => {
         organizationId: null,
         residentialComplexId: null,
       };
-      prisma.residentialComplex.findUnique.mockResolvedValue({
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-dev',
+        email: currentUser.email,
+        name: 'Developer',
+        status: UserStatus.ACTIVE,
+        organizationId: null,
+        residentialComplexId: null,
+        role: { code: 'ROLE_DEV', name: 'Developer' },
+      });
+      prisma.residentialComplex.findFirst.mockResolvedValue({
         id: 'complex-2',
         organizationId: 'org-99',
+        status: 1,
       });
 
       const result = await service.switchComplex(currentUser as any, dto as any);
 
-      expect(result).toEqual({ accessToken: 'signed.jwt.token' });
+      expect(result.accessToken).toBe('signed.jwt.token');
+      expect(result.user.residentialComplexId).toBe('complex-2');
       expect(jwtService.signAsync).toHaveBeenCalledWith({
         ...currentUser,
         organizationId: 'org-99',
@@ -222,7 +235,16 @@ describe('AuthService (QA funcional)', () => {
         organizationId: null,
         residentialComplexId: null,
       };
-      prisma.residentialComplex.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-dev',
+        email: currentUser.email,
+        name: 'Developer',
+        status: UserStatus.ACTIVE,
+        organizationId: null,
+        residentialComplexId: null,
+        role: { code: 'ROLE_DEV', name: 'Developer' },
+      });
+      prisma.residentialComplex.findFirst.mockResolvedValue(null);
 
       await expect(service.switchComplex(currentUser as any, dto as any)).rejects.toThrow(
         NotFoundException,
@@ -237,16 +259,27 @@ describe('AuthService (QA funcional)', () => {
         organizationId: 'org-1',
         residentialComplexId: null,
       };
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-admin',
+        email: currentUser.email,
+        name: 'Admin',
+        status: UserStatus.ACTIVE,
+        organizationId: 'org-1',
+        residentialComplexId: null,
+        role: { code: 'ROLE_ORG_ADMIN', name: 'Administrador' },
+      });
       prisma.residentialComplex.findFirst.mockResolvedValue({
         id: 'complex-2',
         organizationId: 'org-1',
+        status: 1,
       });
 
       const result = await service.switchComplex(currentUser as any, dto as any);
 
-      expect(result).toEqual({ accessToken: 'signed.jwt.token' });
+      expect(result.accessToken).toBe('signed.jwt.token');
+      expect(result.permissions).toEqual([]);
       expect(prisma.residentialComplex.findFirst).toHaveBeenCalledWith({
-        where: { id: 'complex-2', organizationId: 'org-1' },
+        where: { id: 'complex-2', organizationId: 'org-1', status: 1 },
       });
     });
 
@@ -258,6 +291,15 @@ describe('AuthService (QA funcional)', () => {
         organizationId: 'org-1',
         residentialComplexId: null,
       };
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-admin',
+        email: currentUser.email,
+        name: 'Admin',
+        status: UserStatus.ACTIVE,
+        organizationId: 'org-1',
+        residentialComplexId: null,
+        role: { code: 'ROLE_ORG_ADMIN', name: 'Administrador' },
+      });
       prisma.residentialComplex.findFirst.mockResolvedValue(null);
 
       await expect(service.switchComplex(currentUser as any, dto as any)).rejects.toThrow(
@@ -273,6 +315,15 @@ describe('AuthService (QA funcional)', () => {
         organizationId: null,
         residentialComplexId: null,
       };
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-admin',
+        email: currentUser.email,
+        name: 'Admin',
+        status: UserStatus.ACTIVE,
+        organizationId: null,
+        residentialComplexId: null,
+        role: { code: 'ROLE_ORG_ADMIN', name: 'Administrador' },
+      });
 
       await expect(service.switchComplex(currentUser as any, dto as any)).rejects.toThrow(
         ForbiddenException,
@@ -288,9 +339,78 @@ describe('AuthService (QA funcional)', () => {
         organizationId: 'org-1',
         residentialComplexId: 'complex-1',
       };
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-res',
+        email: currentUser.email,
+        name: 'Resident',
+        status: UserStatus.ACTIVE,
+        organizationId: 'org-1',
+        residentialComplexId: 'complex-1',
+        role: { code: 'ROLE_RESIDENT', name: 'Residente' },
+      });
 
       await expect(service.switchComplex(currentUser as any, dto as any)).rejects.toThrow(
         ForbiddenException,
+      );
+    });
+
+    it('ROLE_COMPLEX_ADMIN puede reafirmar su conjunto activo', async () => {
+      const currentUser = {
+        sub: 'user-complex-admin',
+        email: 'admin@complex.com',
+        roleCode: 'ROLE_COMPLEX_ADMIN',
+        organizationId: 'org-1',
+        residentialComplexId: 'complex-1',
+      };
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-complex-admin',
+        email: currentUser.email,
+        name: 'Complex Admin',
+        status: UserStatus.ACTIVE,
+        organizationId: 'org-1',
+        residentialComplexId: 'complex-1',
+        role: { code: 'ROLE_COMPLEX_ADMIN', name: 'Administrador de Conjunto' },
+      });
+      prisma.residentialComplex.findFirst.mockResolvedValue({
+        id: 'complex-1',
+        organizationId: 'org-1',
+        status: 1,
+      });
+
+      const result = await service.switchComplex(
+        currentUser as any,
+        {
+          residentialComplexId: 'complex-1',
+        } as any,
+      );
+
+      expect(result.user.residentialComplexId).toBe('complex-1');
+      expect(jwtService.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ residentialComplexId: 'complex-1' }),
+      );
+    });
+
+    it('rechaza un conjunto inactivo aunque ROLE_DEV lo solicite', async () => {
+      const currentUser = {
+        sub: 'user-dev',
+        email: 'dev@minutadigital.com',
+        roleCode: 'ROLE_DEV',
+        organizationId: null,
+        residentialComplexId: null,
+      };
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-dev',
+        email: currentUser.email,
+        name: 'Developer',
+        status: UserStatus.ACTIVE,
+        organizationId: null,
+        residentialComplexId: null,
+        role: { code: 'ROLE_DEV', name: 'Developer' },
+      });
+      prisma.residentialComplex.findFirst.mockResolvedValue(null);
+
+      await expect(service.switchComplex(currentUser as any, dto as any)).rejects.toThrow(
+        NotFoundException,
       );
     });
   });

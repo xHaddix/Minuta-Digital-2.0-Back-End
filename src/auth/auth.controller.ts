@@ -36,18 +36,18 @@ export class AuthController {
   @Post('switch-complex')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ROLE_DEV', 'ROLE_ORG_ADMIN')
+  @Roles('ROLE_DEV', 'ROLE_ORG_ADMIN', 'ROLE_COMPLEX_ADMIN', 'ROLE_RESIDENT')
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Conmuta de conjunto residencial y emite un nuevo JWT de contexto',
     description:
-      'Permite a Administradores de Organización y Desarrolladores seleccionar un ' +
-      'conjunto residencial activo. Re-firma el JWT asociando el residentialComplexId verificado.',
+      'Valida el alcance del solicitante sobre un conjunto residencial activo y re-firma ' +
+      'el JWT asociando el residentialComplexId verificado.',
   })
   async switchComplex(
     @CurrentUser() user: JwtPayload,
     @Body() dto: SwitchComplexDto,
-  ): Promise<{ accessToken: string }> {
+  ): Promise<AuthResponseDto> {
     return this.authService.switchComplex(user, dto);
   }
 

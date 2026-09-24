@@ -70,6 +70,7 @@ export class AuthService {
     };
 
     const accessToken = await this.jwtService.signAsync(payload);
+    const permissions = await this.getPermissions(user.role.code);
 
     return {
       accessToken,
@@ -82,66 +83,128 @@ export class AuthService {
         organizationId: user.organizationId,
         residentialComplexId: user.residentialComplexId,
       },
+      permissions,
     };
   }
 
   /**
-   * Permite a un ROLE_ORG_ADMIN o ROLE_DEV conmutar de conjunto residencial
-   * y emitir un nuevo Token de Contexto activo.
+   * Valida el alcance multi-tenant y emite un nuevo token de contexto.
    */
-  async switchComplex(
-    currentUser: JwtPayload,
-    dto: SwitchComplexDto,
-  ): Promise<{ accessToken: string }> {
-    // 1. Si es ROLE_DEV, se permite conmutar a cualquier conjunto existente
-    if (currentUser.roleCode === 'ROLE_DEV') {
-      const complexExists = await this.prisma.residentialComplex.findUnique({
-        where: { id: dto.residentialComplexId },
-      });
+  async switchComplex(currentUser: JwtPayload, dto: SwitchComplexDto): Promise<AuthResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: currentUser.sub },
+      include: { role: true },
+    });
 
-      if (!complexExists) {
-        throw new NotFoundException('El conjunto residencial no existe');
-      }
-
-      const newPayload: JwtPayload = {
-        ...currentUser,
-        organizationId: complexExists.organizationId,
-        residentialComplexId: complexExists.id,
-      };
-
-      return { accessToken: await this.jwtService.signAsync(newPayload) };
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('La sesión del usuario ya no es válida');
     }
 
-    // 2. Si es ROLE_ORG_ADMIN, se DEBE verificar la pertenencia a su organización
+    if (user.role.code !== currentUser.roleCode) {
+      throw new ForbiddenException('El rol de la sesión ya no coincide con el usuario');
+    }
+
+    const complex = await this.resolveSwitchTarget(currentUser, user, dto.residentialComplexId);
+    const permissions = await this.getPermissions(user.role.code);
+    const newPayload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      roleCode: user.role.code,
+      organizationId: complex.organizationId,
+      residentialComplexId: complex.id,
+    };
+
+    return {
+      accessToken: await this.jwtService.signAsync(newPayload),
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        roleCode: user.role.code,
+        roleName: user.role.name,
+        organizationId: complex.organizationId,
+        residentialComplexId: complex.id,
+      },
+      permissions,
+    };
+  }
+
+  private async resolveSwitchTarget(
+    currentUser: JwtPayload,
+    user: {
+      organizationId: string | null;
+      residentialComplexId: string | null;
+      role: { code: string };
+    },
+    residentialComplexId: string,
+  ) {
+    if (currentUser.roleCode === 'ROLE_DEV') {
+      const complex = await this.prisma.residentialComplex.findFirst({
+        where: { id: residentialComplexId, status: 1 },
+      });
+
+      if (!complex) {
+        throw new NotFoundException('El conjunto residencial no existe o está inactivo');
+      }
+
+      return complex;
+    }
+
     if (currentUser.roleCode === 'ROLE_ORG_ADMIN') {
-      if (!currentUser.organizationId) {
-        throw new ForbiddenException('El usuario administrador no tiene una organización asignada');
+      if (!currentUser.organizationId || user.organizationId !== currentUser.organizationId) {
+        throw new ForbiddenException('El usuario administrador no tiene una organización válida');
       }
 
       const complex = await this.prisma.residentialComplex.findFirst({
         where: {
-          id: dto.residentialComplexId,
+          id: residentialComplexId,
           organizationId: currentUser.organizationId,
+          status: 1,
         },
       });
 
       if (!complex) {
         throw new ForbiddenException(
-          'El conjunto residencial no pertenece a su organización o no existe',
+          'El conjunto residencial no pertenece a su organización o está inactivo',
         );
       }
 
-      const newPayload: JwtPayload = {
-        ...currentUser,
-        residentialComplexId: complex.id,
-      };
-
-      return { accessToken: await this.jwtService.signAsync(newPayload) };
+      return complex;
     }
 
-    throw new ForbiddenException(
-      'Su rol asignado no tiene permisos para conmutar de conjunto residencial',
-    );
+    if (
+      (currentUser.roleCode === 'ROLE_COMPLEX_ADMIN' || currentUser.roleCode === 'ROLE_RESIDENT') &&
+      user.residentialComplexId === residentialComplexId
+    ) {
+      const complex = await this.prisma.residentialComplex.findFirst({
+        where: {
+          id: residentialComplexId,
+          organizationId: user.organizationId ?? undefined,
+          status: 1,
+        },
+      });
+
+      if (complex) return complex;
+    }
+
+    throw new ForbiddenException('No tienes autorización para acceder a este conjunto residencial');
+  }
+
+  private async getPermissions(roleCode: string): Promise<string[]> {
+    const role = await this.prisma.role.findUnique({
+      where: { code: roleCode },
+      select: {
+        permissions: {
+          where: {
+            status: 1,
+            permission: { status: 1 },
+          },
+          select: { permission: { select: { code: true } } },
+        },
+      },
+    });
+
+    return role?.permissions.map(({ permission }) => permission.code) ?? [];
   }
 
   async activateAccount(dto: ActivateAccountDto): Promise<ActivateAccountResponseDto> {

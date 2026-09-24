@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
   MessageBody,
@@ -9,6 +10,14 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
+
+interface JoinComplexMessage {
+  residentialComplexId?: unknown;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
 
 /**
  * NotificationsGateway
@@ -16,11 +25,9 @@ import { Server, Socket } from 'socket.io';
  * Canal de notificaciones en tiempo real (correspondencia recibida, ingreso
  * de visitantes, actualizaciones de PQRS, etc).
  *
- * AISLAMIENTO POR TENANT: cada cliente debe unirse a una "room" de Socket.IO
- * nombrada con el `tenantSchema` (ej: room "conjunto_los_pinos") justo después
- * de conectarse, enviando el evento `join-tenant`. Todos los `emit` de eventos
- * de negocio deben dirigirse siempre a `server.to(tenantSchema)` y NUNCA
- * hacer broadcast global, para no filtrar eventos entre distintos tenants.
+ * AISLAMIENTO POR TENANT: cada cliente autenticado se une a una room de
+ * Socket.IO nombrada `complex_<residentialComplexId>` usando exclusivamente la
+ * claim firmada del JWT. Los eventos de negocio nunca hacen broadcast global.
  */
 @WebSocketGateway({
   cors: { origin: '*' },
@@ -32,8 +39,22 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   private readonly logger = new Logger(NotificationsGateway.name);
 
+  constructor(private readonly jwtService: JwtService) {}
+
   handleConnection(client: Socket) {
-    this.logger.log(`Cliente conectado: ${client.id}`);
+    const user = this.authenticateClient(client);
+
+    if (!user?.residentialComplexId) {
+      this.logger.warn(`Socket rechazado por falta de contexto: ${client.id}`);
+      client.disconnect(true);
+      return;
+    }
+
+    client.data.user = user;
+    client.join(this.roomForComplex(user.residentialComplexId));
+    this.logger.log(
+      `Cliente ${client.id} unido a ${this.roomForComplex(user.residentialComplexId)}`,
+    );
   }
 
   handleDisconnect(client: Socket) {
@@ -41,27 +62,77 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   }
 
   @SubscribeMessage('join-tenant')
-  handleJoinTenant(
-    @MessageBody() data: { tenantSchema: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.join(data.tenantSchema);
-    this.logger.log(`Socket ${client.id} unido a la room del tenant "${data.tenantSchema}"`);
-    return { joined: data.tenantSchema };
+  handleJoinTenant(@MessageBody() data: JoinComplexMessage, @ConnectedSocket() client: Socket) {
+    const user = client.data.user as JwtPayload | undefined;
+    const requestedComplexId =
+      typeof data?.residentialComplexId === 'string'
+        ? data.residentialComplexId
+        : user?.residentialComplexId;
+
+    if (!user?.residentialComplexId || requestedComplexId !== user.residentialComplexId) {
+      return {
+        joined: false,
+        error: 'El conjunto residencial no coincide con el contexto del token',
+      };
+    }
+
+    const room = this.roomForComplex(user.residentialComplexId);
+    client.join(room);
+    this.logger.log(`Socket ${client.id} unido a la room "${room}"`);
+    return { joined: room };
   }
 
-  /** Notifica a todos los clientes conectados de un tenant que llegó correspondencia nueva. */
-  emitNewCorrespondence(tenantSchema: string, payload: unknown) {
-    this.server.to(tenantSchema).emit('correspondence:new', payload);
+  /** Notifica a todos los clientes del conjunto que llegó correspondencia nueva. */
+  emitNewCorrespondence(residentialComplexId: string, payload: unknown) {
+    this.server.to(this.roomForComplex(residentialComplexId)).emit('correspondence:new', payload);
   }
 
   /** Notifica el ingreso de un visitante en portería. */
-  emitVisitorEntry(tenantSchema: string, payload: unknown) {
-    this.server.to(tenantSchema).emit('visitor:entry', payload);
+  emitVisitorEntry(residentialComplexId: string, payload: unknown) {
+    this.server.to(this.roomForComplex(residentialComplexId)).emit('visitor:entry', payload);
   }
 
   /** Notifica actualizaciones de estado en tickets PQRS. */
-  emitPqrsUpdate(tenantSchema: string, payload: unknown) {
-    this.server.to(tenantSchema).emit('pqrs:update', payload);
+  emitPqrsUpdate(residentialComplexId: string, payload: unknown) {
+    this.server.to(this.roomForComplex(residentialComplexId)).emit('pqrs:update', payload);
+  }
+
+  private roomForComplex(residentialComplexId: string): string {
+    return `complex_${residentialComplexId}`;
+  }
+
+  private authenticateClient(client: Socket): JwtPayload | null {
+    const token = this.readToken(client);
+    if (!token) return null;
+
+    try {
+      const payload = this.jwtService.verify<JwtPayload>(token);
+      if (
+        typeof payload.sub !== 'string' ||
+        typeof payload.email !== 'string' ||
+        typeof payload.roleCode !== 'string' ||
+        (payload.residentialComplexId !== null && typeof payload.residentialComplexId !== 'string')
+      ) {
+        return null;
+      }
+
+      return payload;
+    } catch {
+      return null;
+    }
+  }
+
+  private readToken(client: Socket): string | null {
+    const auth = client.handshake.auth as unknown;
+    if (isRecord(auth) && typeof auth.token === 'string') {
+      return auth.token.replace(/^Bearer\s+/i, '');
+    }
+
+    const authorization = client.handshake.headers.authorization;
+    if (typeof authorization === 'string' && /^Bearer\s+/i.test(authorization)) {
+      return authorization.replace(/^Bearer\s+/i, '');
+    }
+
+    return null;
   }
 }

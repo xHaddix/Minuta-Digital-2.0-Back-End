@@ -43,17 +43,14 @@ export class MarketplaceController {
   @Post()
   @Roles('ROLE_DEV', 'ROLE_ORG_ADMIN', 'ROLE_COMPLEX_ADMIN', 'ROLE_RESIDENT')
   @ApiOperation({ summary: 'Crea una publicación en el mercado interno del conjunto' })
-  create(
-    @CurrentUser('residentialComplexId') residentialComplexId: string,
-    @CurrentUser('userId') userId: string,
-    @Body() dto: CreateMarketplacePostDto,
-  ) {
+  create(@CurrentUser() user: JwtPayload, @Body() dto: CreateMarketplacePostDto) {
+    const residentialComplexId = user.residentialComplexId;
     if (!residentialComplexId) {
       throw new BadRequestException(
         'Debe seleccionar un conjunto residencial activo para crear una publicación',
       );
     }
-    return this.marketplaceService.create(residentialComplexId, userId, dto);
+    return this.marketplaceService.create(residentialComplexId, user.sub, dto);
   }
 
   @Patch(':id/status')

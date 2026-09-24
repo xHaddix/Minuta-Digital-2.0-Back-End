@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { CorrespondenceService } from './correspondence.service';
 import { CreateCorrespondenceDto } from './dto/create-correspondence.dto';
 
@@ -75,7 +76,7 @@ export class CorrespondenceController {
   @ApiOperation({ summary: 'Marca una correspondencia como entregada al residente' })
   markAsDelivered(
     @CurrentUser('residentialComplexId') residentialComplexId: string,
-    @CurrentUser('userId') userId: string,
+    @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     if (!residentialComplexId) {
@@ -83,6 +84,6 @@ export class CorrespondenceController {
         'Debe seleccionar un conjunto residencial activo para actualizar entregas',
       );
     }
-    return this.correspondenceService.markAsDelivered(residentialComplexId, id, userId);
+    return this.correspondenceService.markAsDelivered(residentialComplexId, id, user.sub);
   }
 }

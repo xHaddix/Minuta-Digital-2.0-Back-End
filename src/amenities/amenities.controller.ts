@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { AmenitiesService } from './amenities.service';
 import { CreateAmenityBookingDto } from './dto/create-amenity-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
@@ -40,11 +41,8 @@ export class AmenitiesController {
   @Post('bookings')
   @Roles('ROLE_DEV', 'ROLE_ORG_ADMIN', 'ROLE_COMPLEX_ADMIN', 'ROLE_RESIDENT')
   @ApiOperation({ summary: 'Crea una reserva de amenidad' })
-  create(
-    @CurrentUser('residentialComplexId') residentialComplexId: string,
-    @CurrentUser('userId') userId: string,
-    @Body() dto: CreateAmenityBookingDto,
-  ) {
+  create(@CurrentUser() user: JwtPayload, @Body() dto: CreateAmenityBookingDto) {
+    const residentialComplexId = user.residentialComplexId;
     if (!residentialComplexId) {
       throw new BadRequestException(
         'Debe seleccionar un conjunto residencial activo para realizar una reserva',
@@ -52,7 +50,7 @@ export class AmenitiesController {
     }
     return this.amenitiesService.create(residentialComplexId, {
       ...dto,
-      userId,
+      userId: user.sub,
     });
   }
 

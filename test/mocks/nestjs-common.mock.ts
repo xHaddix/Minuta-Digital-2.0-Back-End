@@ -16,11 +16,21 @@ export function Injectable(): ClassDecorator {
 
 export class Logger {
   constructor(private readonly context?: string) {}
-  log(..._args: unknown[]): void {}
-  error(..._args: unknown[]): void {}
-  warn(..._args: unknown[]): void {}
-  debug(..._args: unknown[]): void {}
-  verbose(..._args: unknown[]): void {}
+  log(...args: unknown[]): void {
+    void args;
+  }
+  error(...args: unknown[]): void {
+    void args;
+  }
+  warn(...args: unknown[]): void {
+    void args;
+  }
+  debug(...args: unknown[]): void {
+    void args;
+  }
+  verbose(...args: unknown[]): void {
+    void args;
+  }
 }
 
 class HttpExceptionMock extends Error {
