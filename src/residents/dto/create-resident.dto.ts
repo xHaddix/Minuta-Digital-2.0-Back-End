@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateResidentDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'ID del usuario asignado como residente (tabla users)',
     example: 'd9b2b687-3520-4e31-8f5f-9e7d9c66f2a1',
   })
@@ -15,8 +15,13 @@ export class CreateResidentDto {
     example: 'Torre 2 Apto 504',
   })
   @IsString()
-  @IsNotEmpty({ message: 'El número de unidad habitacional es obligatorio' })
-  unitNumber!: string;
+  @IsOptional()
+  unitNumber?: string;
+
+  @ApiPropertyOptional({ description: 'ID del apartamento del catálogo' })
+  @IsUUID('4', { message: 'El apartmentId debe ser un UUID v4 válido' })
+  @IsOptional()
+  apartmentId?: string;
 
   @ApiPropertyOptional({
     description: 'Indica si el residente es propietario del inmueble',

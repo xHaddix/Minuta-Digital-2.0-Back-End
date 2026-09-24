@@ -12,9 +12,12 @@ import { UpdateApartmentDto } from './dto/update-apartment.dto';
 export class ApartmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(residentialComplexId: string) {
-    return this.prisma.apartment.findMany({
-      where: { residentialComplexId, status: 1 },
+  async findAll(residentialComplexId: string, includeInactive = false) {
+    const apartments = await this.prisma.apartment.findMany({
+      where: {
+        residentialComplexId,
+        ...(includeInactive ? {} : { status: 1 }),
+      },
       orderBy: { unitNumber: 'asc' },
       select: {
         id: true,
@@ -26,6 +29,24 @@ export class ApartmentsService {
         createdAt: true,
         updatedAt: true,
       },
+    });
+
+    const residents = await this.prisma.resident.groupBy({
+      by: ['unitNumber'],
+      where: { residentialComplexId },
+      _count: { _all: true },
+    });
+    const residentCountByUnit = new Map(
+      residents.map((resident) => [resident.unitNumber, resident._count._all]),
+    );
+
+    return apartments.map((apartment) => {
+      const residentCount = residentCountByUnit.get(apartment.unitNumber) ?? 0;
+      return {
+        ...apartment,
+        residentCount,
+        available: apartment.status === 1 && residentCount === 0,
+      };
     });
   }
 

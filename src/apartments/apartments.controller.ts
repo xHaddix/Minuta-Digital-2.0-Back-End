@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -31,8 +32,13 @@ export class ApartmentsController {
   @Get()
   @Roles(RoleCode.DEV, RoleCode.ORG_ADMIN, RoleCode.COMPLEX_ADMIN, RoleCode.SECURITY)
   @ApiOperation({ summary: 'Lista las unidades activas del conjunto actual' })
-  findAll(@CurrentUser() requester: JwtPayload) {
-    return this.withComplex(requester, (complexId) => this.apartmentsService.findAll(complexId));
+  findAll(
+    @CurrentUser() requester: JwtPayload,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    return this.withComplex(requester, (complexId) =>
+      this.apartmentsService.findAll(complexId, includeInactive === 'true'),
+    );
   }
 
   @Post()

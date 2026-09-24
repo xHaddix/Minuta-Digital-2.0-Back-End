@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
   BadRequestException,
@@ -15,6 +16,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ResidentsService } from './residents.service';
 import { CreateResidentDto } from './dto/create-resident.dto';
+import { AssignApartmentDto } from './dto/assign-apartment.dto';
 
 @ApiTags('Residents')
 @ApiBearerAuth('access-token')
@@ -63,5 +65,19 @@ export class ResidentsController {
       );
     }
     return this.residentsService.create(residentialComplexId, dto);
+  }
+
+  @Patch(':id/apartment')
+  @Roles('ROLE_DEV', 'ROLE_ORG_ADMIN', 'ROLE_COMPLEX_ADMIN')
+  @ApiOperation({ summary: 'Asigna un residente a un apartamento del conjunto' })
+  assignApartment(
+    @CurrentUser('residentialComplexId') residentialComplexId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignApartmentDto,
+  ) {
+    if (!residentialComplexId) {
+      throw new BadRequestException('Debe seleccionar un conjunto residencial activo');
+    }
+    return this.residentsService.assignApartment(residentialComplexId, id, dto.apartmentId);
   }
 }
