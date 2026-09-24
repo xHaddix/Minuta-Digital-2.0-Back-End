@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -12,56 +13,77 @@ import { UpdateApartmentDto } from './dto/update-apartment.dto';
 export class ApartmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(residentialComplexId: string, includeInactive = false) {
+  /**
+   * Obtiene la lista de apartamentos acotados por el token JWT (Zero-Trust Scoping).
+   */
+  async findAll(requester: any, includeInactive = false) {
+    const complexId = requester?.residentialComplexId;
+
+    if (!complexId && requester?.roleCode !== 'ROLE_DEV') {
+      throw new ForbiddenException('Se requiere un conjunto residencial activo en la sesión.');
+    }
+
     const apartments = await this.prisma.apartment.findMany({
       where: {
-        residentialComplexId,
+        ...(complexId ? { residentialComplexId: complexId } : {}),
         ...(includeInactive ? {} : { status: 1 }),
       },
-      orderBy: { unitNumber: 'asc' },
       select: {
         id: true,
-        unitNumber: true,
+        residentialComplexId: true,
         tower: true,
-        apartmentNumber: true,
+        unitNumber: true,
         unitType: true,
         status: true,
         createdAt: true,
         updatedAt: true,
+        _count: {
+          select: { residents: true },
+        },
       },
+      orderBy: [{ tower: 'asc' }, { unitNumber: 'asc' }],
     });
-
-    const residents = await this.prisma.resident.groupBy({
-      by: ['unitNumber'],
-      where: { residentialComplexId },
-      _count: { _all: true },
-    });
-    const residentCountByUnit = new Map(
-      residents.map((resident) => [resident.unitNumber, resident._count._all]),
-    );
 
     return apartments.map((apartment) => {
-      const residentCount = residentCountByUnit.get(apartment.unitNumber) ?? 0;
+      const residentCount = apartment._count.residents;
       return {
-        ...apartment,
+        id: apartment.id,
+        residentialComplexId: apartment.residentialComplexId,
+        tower: apartment.tower,
+        unitNumber: apartment.unitNumber,
+        unitType: apartment.unitType,
+        status: apartment.status,
+        createdAt: apartment.createdAt,
+        updatedAt: apartment.updatedAt,
         residentCount,
         available: apartment.status === 1 && residentCount === 0,
       };
     });
   }
 
-  async create(residentialComplexId: string, dto: CreateApartmentDto) {
+  async create(requester: any, dto: CreateApartmentDto) {
+    const complexId = requester?.residentialComplexId;
+    if (!complexId) {
+      throw new ForbiddenException('No se ha especificado un conjunto en la sesión.');
+    }
+
     const unitNumber = this.resolveUnitNumber(dto);
 
     try {
       return await this.prisma.apartment.create({
         data: {
-          residentialComplexId,
+          residentialComplexId: complexId,
           unitNumber,
           tower: dto.tower?.trim() || null,
-          apartmentNumber: dto.apartmentNumber?.trim() || null,
           unitType: dto.unitType?.trim() || 'APARTMENT',
           status: dto.status ?? 1,
+        },
+        select: {
+          id: true,
+          tower: true,
+          unitNumber: true,
+          unitType: true,
+          status: true,
         },
       });
     } catch (error) {
@@ -72,9 +94,10 @@ export class ApartmentsService {
     }
   }
 
-  async update(residentialComplexId: string, id: string, dto: UpdateApartmentDto) {
+  async update(requester: any, id: string, dto: UpdateApartmentDto) {
+    const complexId = requester?.residentialComplexId;
     const existing = await this.prisma.apartment.findFirst({
-      where: { id, residentialComplexId },
+      where: { id, ...(complexId ? { residentialComplexId: complexId } : {}) },
     });
 
     if (!existing) {
@@ -83,21 +106,14 @@ export class ApartmentsService {
 
     try {
       const nextTower = dto.tower === undefined ? existing.tower : dto.tower.trim() || null;
-      const nextApartmentNumber =
-        dto.apartmentNumber === undefined
-          ? existing.apartmentNumber
-          : dto.apartmentNumber.trim() || null;
       const nextUnitNumber =
-        dto.unitNumber === undefined
-          ? this.composeUnitNumber(nextTower, nextApartmentNumber, existing.unitNumber)
-          : dto.unitNumber.trim();
+        dto.unitNumber === undefined ? existing.unitNumber : dto.unitNumber.trim();
 
       return await this.prisma.apartment.update({
         where: { id },
         data: {
           unitNumber: nextUnitNumber,
           tower: nextTower,
-          apartmentNumber: nextApartmentNumber,
           ...(dto.unitType === undefined ? {} : { unitType: dto.unitType.trim() }),
           ...(dto.status === undefined ? {} : { status: dto.status }),
         },
@@ -110,9 +126,10 @@ export class ApartmentsService {
     }
   }
 
-  async remove(residentialComplexId: string, id: string) {
+  async remove(requester: any, id: string) {
+    const complexId = requester?.residentialComplexId;
     const existing = await this.prisma.apartment.findFirst({
-      where: { id, residentialComplexId },
+      where: { id, ...(complexId ? { residentialComplexId: complexId } : {}) },
     });
 
     if (!existing) {
@@ -127,32 +144,21 @@ export class ApartmentsService {
   }
 
   private isUniqueConstraintError(error: unknown): boolean {
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as any).code === 'P2002'
+    );
   }
 
   private resolveUnitNumber(dto: CreateApartmentDto): string {
     const unitNumber = dto.unitNumber?.trim();
     if (unitNumber) return unitNumber;
 
-    const composed = this.composeUnitNumber(
-      dto.tower?.trim() || null,
-      dto.apartmentNumber?.trim() || null,
-      '',
-    );
-    if (!composed) {
-      throw new BadRequestException('Debe indicar unitNumber o una torre y número de apartamento');
+    if (!dto.tower?.trim()) {
+      throw new BadRequestException('Debe indicar un número de unidad o una torre');
     }
-    return composed;
-  }
-
-  private composeUnitNumber(
-    tower: string | null,
-    apartmentNumber: string | null,
-    fallback: string,
-  ): string {
-    const parts = [tower ? `Torre ${tower}` : '', apartmentNumber ? `Apto ${apartmentNumber}` : '']
-      .filter(Boolean)
-      .join(' ');
-    return parts || fallback;
+    return `Torre ${dto.tower.trim()}`;
   }
 }

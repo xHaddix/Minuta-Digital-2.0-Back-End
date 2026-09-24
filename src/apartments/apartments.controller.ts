@@ -11,7 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -32,22 +32,21 @@ export class ApartmentsController {
   @Get()
   @Roles(RoleCode.DEV, RoleCode.ORG_ADMIN, RoleCode.COMPLEX_ADMIN, RoleCode.SECURITY)
   @ApiOperation({ summary: 'Lista las unidades activas del conjunto actual' })
+  @ApiQuery({ name: 'includeInactive', required: false, type: Boolean })
   findAll(
     @CurrentUser() requester: JwtPayload,
     @Query('includeInactive') includeInactive?: string,
   ) {
-    return this.withComplex(requester, (complexId) =>
-      this.apartmentsService.findAll(complexId, includeInactive === 'true'),
-    );
+    this.validateComplexContext(requester);
+    return this.apartmentsService.findAll(requester, includeInactive === 'true');
   }
 
   @Post()
   @Roles(RoleCode.DEV, RoleCode.ORG_ADMIN, RoleCode.COMPLEX_ADMIN)
   @ApiOperation({ summary: 'Crea una unidad en el conjunto actual' })
   create(@CurrentUser() requester: JwtPayload, @Body() dto: CreateApartmentDto) {
-    return this.withComplex(requester, (complexId) =>
-      this.apartmentsService.create(complexId, dto),
-    );
+    this.validateComplexContext(requester);
+    return this.apartmentsService.create(requester, dto);
   }
 
   @Patch(':id')
@@ -58,22 +57,24 @@ export class ApartmentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateApartmentDto,
   ) {
-    return this.withComplex(requester, (complexId) =>
-      this.apartmentsService.update(complexId, id, dto),
-    );
+    this.validateComplexContext(requester);
+    return this.apartmentsService.update(requester, id, dto);
   }
 
   @Delete(':id')
   @Roles(RoleCode.DEV, RoleCode.ORG_ADMIN, RoleCode.COMPLEX_ADMIN)
   @ApiOperation({ summary: 'Desactiva una unidad del conjunto actual' })
   remove(@CurrentUser() requester: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
-    return this.withComplex(requester, (complexId) => this.apartmentsService.remove(complexId, id));
+    this.validateComplexContext(requester);
+    return this.apartmentsService.remove(requester, id);
   }
 
-  private withComplex<T>(requester: JwtPayload, operation: (complexId: string) => T): T {
-    if (!requester.residentialComplexId) {
+  /**
+   * Valida que el JWT del usuario contenga un contexto de conjunto residencial activo.
+   */
+  private validateComplexContext(requester: JwtPayload): void {
+    if (!requester.residentialComplexId && requester.roleCode !== RoleCode.DEV) {
       throw new BadRequestException('Debe seleccionar un conjunto residencial activo');
     }
-    return operation(requester.residentialComplexId);
   }
 }
