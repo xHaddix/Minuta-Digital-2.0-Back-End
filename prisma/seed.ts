@@ -89,6 +89,28 @@ async function main() {
     },
     { code: 'visitors:check_out', description: 'Marcar salida de visitantes', module: 'visitors' },
 
+    // Módulo: Apartamentos
+    {
+      code: 'apartments:read',
+      description: 'Consultar las unidades del conjunto residencial',
+      module: 'apartments',
+    },
+    {
+      code: 'apartments:create',
+      description: 'Crear unidades habitacionales',
+      module: 'apartments',
+    },
+    {
+      code: 'apartments:update',
+      description: 'Editar unidades habitacionales',
+      module: 'apartments',
+    },
+    {
+      code: 'apartments:delete',
+      description: 'Desactivar unidades habitacionales',
+      module: 'apartments',
+    },
+
     // Módulo: Correspondencia
     {
       code: 'correspondence:read',
@@ -201,6 +223,7 @@ async function main() {
       'visitors:read',
       'visitors:create',
       'visitors:check_out',
+      'apartments:read',
       'correspondence:read',
       'correspondence:create',
       'correspondence:deliver',
@@ -214,6 +237,10 @@ async function main() {
       'users:update',
       'users:delete',
       'visitors:read',
+      'apartments:read',
+      'apartments:create',
+      'apartments:update',
+      'apartments:delete',
       'correspondence:read',
       'amenities:read',
       'amenities:manage',
@@ -236,7 +263,16 @@ async function main() {
       'marketplace:create',
       'marketplace:manage_own',
     ],
-    ROLE_ORG_ADMIN: ['complexes:manage', 'users:read', 'users:create', 'users:update'],
+    ROLE_ORG_ADMIN: [
+      'complexes:manage',
+      'apartments:read',
+      'apartments:create',
+      'apartments:update',
+      'apartments:delete',
+      'users:read',
+      'users:create',
+      'users:update',
+    ],
     ROLE_DEV: Object.keys(createdPermissions), // ROLE_DEV obtiene TODOS los permisos
   };
 
