@@ -56,13 +56,54 @@ export class StorageService {
     // params.tenantId contiene en realidad el residentialComplexId validado por el controlador
     const key = this.buildKey(params.tenantId, params.module, params.fileName);
 
+    return this.uploadObject(key, params.body, params.contentType);
+  }
+
+  async uploadOrganizationLogo(organizationId: string, body: Buffer, contentType: string) {
+    return this.uploadObject(
+      `orgs/${organizationId}/logo/${uuidv4()}.${this.extension(contentType)}`,
+      body,
+      contentType,
+    );
+  }
+
+  async uploadComplexLogo(complexId: string, body: Buffer, contentType: string) {
+    return this.uploadObject(
+      `complexes/${complexId}/logo/${uuidv4()}.${this.extension(contentType)}`,
+      body,
+      contentType,
+    );
+  }
+
+  async uploadUserAvatar(complexId: string, userId: string, body: Buffer, contentType: string) {
+    return this.uploadObject(
+      `complexes/${complexId}/users/${userId}/${uuidv4()}.${this.extension(contentType)}`,
+      body,
+      contentType,
+    );
+  }
+
+  async uploadPublicFavicon(body: Buffer, contentType = 'image/x-icon') {
+    return this.uploadObject(`public/favicons/${uuidv4()}.ico`, body, contentType);
+  }
+
+  private extension(contentType: string): string {
+    const extensions: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+    };
+    return extensions[contentType] ?? 'bin';
+  }
+
+  private async uploadObject(key: string, body: Buffer, contentType?: string) {
     try {
       await this.client.send(
         new PutObjectCommand({
           Bucket: this.bucket,
           Key: key,
-          Body: params.body,
-          ContentType: params.contentType,
+          Body: body,
+          ContentType: contentType,
         }),
       );
     } catch (error) {
@@ -107,6 +148,9 @@ export class StorageService {
    * Construye la URL pública del objeto almacenado.
    */
   private buildPublicUrl(key: string): string {
+    const publicUrl = this.configService.get<string>('app.storage.publicUrl', '');
+    if (publicUrl)
+      return `${publicUrl.replace(/\/$/, '')}/${key.split('/').map(encodeURIComponent).join('/')}`;
     const endpoint = this.configService.get<string>('app.storage.endpoint', '');
     return `${endpoint.replace(/\/$/, '')}/${this.bucket}/${key}`;
   }

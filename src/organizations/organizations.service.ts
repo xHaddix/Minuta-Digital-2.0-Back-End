@@ -9,10 +9,31 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { RoleCode } from '../common/constants/role.constants';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
+
+  async uploadLogo(id: string, file: Express.Multer.File, requester: JwtPayload) {
+    const organization = await this.prisma.organization.findFirst({ where: { id, status: 1 } });
+    if (!organization) throw new NotFoundException('Organización no encontrada o inactiva');
+    if (requester.roleCode !== RoleCode.DEV && requester.roleCode !== RoleCode.ORG_ADMIN) {
+      throw new ForbiddenException('No tiene permisos para actualizar organizaciones');
+    }
+    if (requester.roleCode === RoleCode.ORG_ADMIN && organization.id !== requester.organizationId) {
+      throw new ForbiddenException('Solo puedes actualizar tu propia organización');
+    }
+    const asset = await this.storage.uploadOrganizationLogo(id, file.buffer, file.mimetype);
+    return this.prisma.organization.update({
+      where: { id },
+      data: { urlLogo: asset.url },
+      select: { id: true, urlLogo: true },
+    });
+  }
 
   findAll(requester: JwtPayload) {
     if (requester.roleCode !== RoleCode.DEV && requester.roleCode !== RoleCode.ORG_ADMIN) {

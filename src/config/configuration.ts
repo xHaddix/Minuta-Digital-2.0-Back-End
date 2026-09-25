@@ -11,11 +11,13 @@ export default registerAs('app', () => ({
     centralUrl: process.env.DATABASE_URL,
   },
   storage: {
-    endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
-    region: process.env.S3_REGION ?? 'us-east-1',
-    bucket: process.env.S3_BUCKET ?? 'minuta-bucket',
-    accessKeyId: process.env.S3_ACCESS_KEY_ID ?? '',
-    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
+    endpoint: process.env.STORAGE_ENDPOINT ?? process.env.S3_ENDPOINT ?? 'http://localhost:9000',
+    region: process.env.STORAGE_REGION ?? process.env.S3_REGION ?? 'us-east-1',
+    bucket: process.env.STORAGE_BUCKET_NAME ?? process.env.S3_BUCKET ?? 'minuta-bucket',
+    accessKeyId: process.env.STORAGE_ACCESS_KEY_ID ?? process.env.S3_ACCESS_KEY_ID ?? '',
+    secretAccessKey:
+      process.env.STORAGE_SECRET_ACCESS_KEY ?? process.env.S3_SECRET_ACCESS_KEY ?? '',
+    publicUrl: process.env.STORAGE_PUBLIC_URL ?? '',
     forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true',
   },
   mail: {

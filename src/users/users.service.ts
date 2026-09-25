@@ -30,6 +30,7 @@ const USER_PUBLIC_SELECT = {
   status: true,
   organizationId: true,
   residentialComplexId: true,
+  imgProfile: true,
   documentNumber: true,
   createdAt: true,
   role: {
@@ -72,6 +73,18 @@ export class UsersService {
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
     return user;
+  }
+
+  async updateProfileImage(requester: JwtPayload, id: string, imgProfile: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, ...this.scopeWhereClause(requester) },
+    });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return this.prisma.user.update({
+      where: { id },
+      data: { imgProfile },
+      select: USER_PUBLIC_SELECT,
+    });
   }
 
   /**

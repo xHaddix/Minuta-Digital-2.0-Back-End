@@ -9,6 +9,7 @@ import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { RoleCode } from '../common/constants/role.constants';
 import { CreateResidentialComplexDto } from './dto/create-residential-complex.dto';
 import { UpdateResidentialComplexDto } from './dto/update-residential-complex.dto';
+import { StorageService } from '../storage/storage.service';
 
 const RESIDENTIAL_COMPLEX_PUBLIC_SELECT = {
   id: true,
@@ -26,7 +27,30 @@ const RESIDENTIAL_COMPLEX_PUBLIC_SELECT = {
 
 @Injectable()
 export class ResidentialComplexesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
+
+  async uploadLogo(id: string, file: Express.Multer.File, requester: JwtPayload) {
+    const complex = await this.prisma.residentialComplex.findFirst({ where: { id, status: 1 } });
+    if (!complex) throw new NotFoundException('Conjunto residencial no encontrado o inactivo');
+    if (requester.roleCode !== RoleCode.DEV && requester.roleCode !== RoleCode.ORG_ADMIN) {
+      throw new ForbiddenException('No tiene permisos para actualizar conjuntos residenciales');
+    }
+    if (
+      requester.roleCode === RoleCode.ORG_ADMIN &&
+      complex.organizationId !== requester.organizationId
+    ) {
+      throw new ForbiddenException('Solo puedes actualizar conjuntos de tu propia organización');
+    }
+    const asset = await this.storage.uploadComplexLogo(id, file.buffer, file.mimetype);
+    return this.prisma.residentialComplex.update({
+      where: { id },
+      data: { urlLogo: asset.url },
+      select: { id: true, urlLogo: true },
+    });
+  }
 
   /**
    * Lista conjuntos residenciales acotados según la jerarquía RBAC del solicitante.
