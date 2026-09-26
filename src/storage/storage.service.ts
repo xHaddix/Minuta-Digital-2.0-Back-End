@@ -110,7 +110,16 @@ export class StorageService {
         }),
       );
     } catch (error) {
-      this.logger.error(`Error subiendo archivo a S3/MinIO: ${key}`, error as Error);
+      const storageError = error as Error & {
+        $metadata?: { httpStatusCode?: number };
+        $responseBodyText?: string;
+      };
+      const responseDetails = storageError.$responseBodyText?.slice(0, 1500);
+      const status = storageError.$metadata?.httpStatusCode;
+      this.logger.error(
+        `Error subiendo archivo a S3/MinIO: ${key}${status ? ` (HTTP ${status})` : ''}${responseDetails ? `; respuesta del proveedor: ${responseDetails}` : ''}`,
+        storageError.stack,
+      );
       throw new InternalServerErrorException('No fue posible subir el archivo');
     }
 
