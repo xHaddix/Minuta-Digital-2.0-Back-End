@@ -204,14 +204,25 @@ export class UsersService {
     }
 
     // 3. Validar jerarquía de asignación si se intenta reasignar el rol
+    let resolvedHierarchy: Awaited<ReturnType<UserHierarchyService['resolve']>> | undefined;
     if (dto.roleId && dto.roleId !== existingUser.roleId) {
-      const hierarchy = await this.userHierarchy.resolve({
-        roleId: dto.roleId,
-        organizationId: existingUser.organizationId,
-        residentialComplexId: existingUser.residentialComplexId,
+      // A complex-scoped user's organizationId is derived from the complex.
+      // Pass only the hierarchy fields required by the target role.
+      const targetRole = await this.prisma.role.findUnique({
+        where: { id: dto.roleId },
+        select: { code: true },
       });
+      const hierarchyInput = {
+        roleId: dto.roleId,
+        ...(targetRole?.code === RoleCode.ORG_ADMIN
+          ? { organizationId: existingUser.organizationId }
+          : targetRole?.code === RoleCode.DEV
+            ? {}
+            : { residentialComplexId: existingUser.residentialComplexId }),
+      };
+      resolvedHierarchy = await this.userHierarchy.resolve(hierarchyInput);
 
-      this.userHierarchy.assertRequesterCanAssign(requester, hierarchy);
+      this.userHierarchy.assertRequesterCanAssign(requester, resolvedHierarchy);
     }
 
     // 4. Actualización atómica del usuario
@@ -222,6 +233,10 @@ export class UsersService {
         ...(dto.imgProfile !== undefined && { imgProfile: dto.imgProfile }),
         ...(dto.phone !== undefined && { phone: dto.phone?.trim() }),
         ...(dto.roleId && { roleId: dto.roleId }),
+        ...(resolvedHierarchy && {
+          organizationId: resolvedHierarchy.organizationId,
+          residentialComplexId: resolvedHierarchy.residentialComplexId,
+        }),
         ...(dto.documentTypeId !== undefined && { documentTypeId: dto.documentTypeId }),
         ...(dto.documentNumber !== undefined && { documentNumber: dto.documentNumber?.trim() }),
         ...(dto.status !== undefined && { status: dto.status }),
