@@ -123,6 +123,7 @@ export class UsersService {
         data: {
           email: cleanEmail,
           name: dto.name.trim(),
+          imgProfile: dto.imgProfile,
           phone: dto.phone?.trim(),
           roleId: hierarchy.roleId,
           organizationId: hierarchy.organizationId,
@@ -218,6 +219,7 @@ export class UsersService {
       where: { id },
       data: {
         ...(dto.name && { name: dto.name.trim() }),
+        ...(dto.imgProfile !== undefined && { imgProfile: dto.imgProfile }),
         ...(dto.phone !== undefined && { phone: dto.phone?.trim() }),
         ...(dto.roleId && { roleId: dto.roleId }),
         ...(dto.documentTypeId !== undefined && { documentTypeId: dto.documentTypeId }),

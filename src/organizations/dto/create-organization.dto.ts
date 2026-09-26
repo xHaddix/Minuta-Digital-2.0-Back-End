@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, Length } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, IsUrl, Length } from 'class-validator';
 
 export class CreateOrganizationDto {
   @ApiProperty({ example: 'Conjunto Los Pinos' })
@@ -10,12 +10,12 @@ export class CreateOrganizationDto {
 
   @ApiPropertyOptional({ example: 'https://cdn.minutadigital.com/logo.png' })
   @IsOptional()
-  @IsString()
+  @IsUrl({ require_protocol: true })
   url?: string;
 
   @ApiPropertyOptional({ example: 'https://cdn.minutadigital.com/logo.png' })
   @IsOptional()
-  @IsString()
+  @IsUrl({ require_protocol: true })
   urlLogo?: string;
 
   @ApiPropertyOptional({ description: 'Id del tipo de documento', example: '1a2b3c4d-...' })

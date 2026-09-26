@@ -1,8 +1,24 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsPhoneNumber, IsString, IsUUID, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsPhoneNumber,
+  IsString,
+  IsUUID,
+  IsUrl,
+  MinLength,
+} from 'class-validator';
 import { UserStatus } from '../../common/constants/user-token.constants';
 
 export class UpdateUserDto {
+  @ApiPropertyOptional({
+    description: 'URL de la imagen de perfil del usuario',
+    example: 'https://cdn.example.com/avatar.png',
+  })
+  @IsOptional()
+  @IsUrl({ require_protocol: true })
+  imgProfile?: string;
+
   @ApiPropertyOptional({
     description: 'Nombre completo del usuario',
     example: 'Carlos Alberto Pérez',

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, IsUrl } from 'class-validator';
 
 /**
  * DTO utilizado por un Administrador para invitar/crear un nuevo usuario.
@@ -17,6 +17,14 @@ import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validat
  *                           se deriva automáticamente y NO debe enviarse.
  */
 export class InviteUserDto {
+  @ApiPropertyOptional({
+    description: 'URL opcional de la imagen de perfil',
+    example: 'https://cdn.example.com/avatar.png',
+  })
+  @IsOptional()
+  @IsUrl({ require_protocol: true })
+  imgProfile?: string;
+
   @ApiProperty({ example: 'nuevo.usuario@conjuntolospinos.com' })
   @IsEmail({}, { message: 'El correo electrónico no es válido' })
   @IsNotEmpty()

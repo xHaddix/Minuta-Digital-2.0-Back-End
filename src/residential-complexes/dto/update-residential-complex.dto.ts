@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, IsUUID, Length, Matches } from 'class-validator';
+import { IsEmail, IsOptional, IsString, IsUUID, IsUrl, Length, Matches } from 'class-validator';
 
 export class UpdateResidentialComplexDto {
   @ApiPropertyOptional({ example: 'Conjunto Los Pinos' })
@@ -36,12 +36,12 @@ export class UpdateResidentialComplexDto {
 
   @ApiPropertyOptional({ example: 'https://cdn.minutadigital.com/complex-logo.png' })
   @IsOptional()
-  @IsString()
+  @IsUrl({ require_protocol: true })
   url?: string;
 
   @ApiPropertyOptional({ example: 'https://cdn.minutadigital.com/complex-logo.png' })
   @IsOptional()
-  @IsString()
+  @IsUrl({ require_protocol: true })
   urlLogo?: string;
 
   @ApiPropertyOptional({ example: 'BASIC' })

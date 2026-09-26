@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsUrl,
   Length,
   Matches,
 } from 'class-validator';
@@ -45,12 +46,12 @@ export class CreateResidentialComplexDto {
 
   @ApiPropertyOptional({ example: 'https://cdn.minutadigital.com/complex-logo.png' })
   @IsOptional()
-  @IsString()
+  @IsUrl({ require_protocol: true })
   url?: string;
 
   @ApiPropertyOptional({ example: 'https://cdn.minutadigital.com/complex-logo.png' })
   @IsOptional()
-  @IsString()
+  @IsUrl({ require_protocol: true })
   urlLogo?: string;
 
   @ApiPropertyOptional({ example: 'BASIC' })

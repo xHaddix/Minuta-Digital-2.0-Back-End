@@ -14,7 +14,7 @@ import {
   MaxFileSizeValidator,
   FileTypeValidator,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -78,6 +78,14 @@ export class OrganizationsController {
   @Post(':id/logo')
   @Roles(RoleCode.DEV, RoleCode.ORG_ADMIN)
   @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiOperation({ summary: 'Sube el logo de la organización y actualiza urlLogo' })
   @UseInterceptors(FileInterceptor('file'))
   uploadLogo(
     @CurrentUser() requester: JwtPayload,
