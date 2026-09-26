@@ -36,6 +36,9 @@ export class StorageService {
       region: this.configService.get<string>('app.storage.region', 'us-east-1'),
       endpoint: this.configService.get<string>('app.storage.endpoint'),
       forcePathStyle: this.configService.get<boolean>('app.storage.forcePathStyle', true),
+      // Supabase Storage no admite x-amz-sdk-checksum-algorithm en el endpoint S3.
+      // Evita el CRC32 automático que AWS SDK v3.729+ agrega por defecto a PutObject.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
       credentials: {
         accessKeyId: this.configService.get<string>('app.storage.accessKeyId', ''),
         secretAccessKey: this.configService.get<string>('app.storage.secretAccessKey', ''),
