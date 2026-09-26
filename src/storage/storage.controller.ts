@@ -11,7 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -32,6 +32,20 @@ export class StorageController {
     summary: 'Sube un archivo aislado bajo el conjunto residencial activo',
   })
   @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file', 'module'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        module: {
+          type: 'string',
+          enum: ['correspondence', 'pqrs', 'marketplace', 'amenities', 'visitors', 'general'],
+          example: 'general',
+        },
+      },
+    },
+  })
   @UseInterceptors(FileInterceptor('file'))
   async upload(
     @UploadedFile(

@@ -4,6 +4,8 @@ class AuthUserDto {
   @ApiProperty() id!: string;
   @ApiProperty() email!: string;
   @ApiProperty() name!: string;
+  @ApiProperty({ description: 'URL pública de la imagen de perfil', nullable: true })
+  imgProfile!: string | null;
   @ApiProperty({ description: 'Código del rol (tabla roles.code)' }) roleCode!: string;
   @ApiProperty({ description: 'Nombre legible del rol' }) roleName!: string;
   @ApiProperty({ nullable: true }) organizationId!: string | null;
