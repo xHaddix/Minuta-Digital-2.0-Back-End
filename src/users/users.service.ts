@@ -101,6 +101,14 @@ export class UsersService {
     });
   }
 
+  updateOwnProfileImage(imgProfile: string, requester: JwtPayload) {
+    return this.prisma.user.update({
+      where: { id: requester.sub },
+      data: { imgProfile },
+      select: USER_PUBLIC_SELECT,
+    });
+  }
+
   async updateProfileImage(requester: JwtPayload, id: string, imgProfile: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, ...this.scopeWhereClause(requester) },

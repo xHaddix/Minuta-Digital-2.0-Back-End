@@ -49,6 +49,44 @@ export class UsersController {
     private readonly storageService: StorageService,
   ) {}
 
+  @Post('me/avatar')
+  @Roles(
+    RoleCode.DEV,
+    RoleCode.ORG_ADMIN,
+    RoleCode.COMPLEX_ADMIN,
+    RoleCode.SECURITY,
+    RoleCode.RESIDENT,
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiOperation({ summary: 'Actualiza la foto del perfil propio' })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadOwnAvatar(
+    @CurrentUser() requester: JwtPayload,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /^image\/(png|jpeg|webp)$/ }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    const asset = await this.storageService.uploadOwnUserAvatar(
+      requester.sub,
+      file.buffer,
+      file.mimetype,
+    );
+    return this.usersService.updateOwnProfileImage(asset.url, requester);
+  }
+
   @Post(':id/avatar')
   @Roles(
     RoleCode.DEV,

@@ -86,6 +86,14 @@ export class StorageService {
     );
   }
 
+  async uploadOwnUserAvatar(userId: string, body: Buffer, contentType: string) {
+    return this.uploadObject(
+      `users/${userId}/${uuidv4()}.${this.extension(contentType)}`,
+      body,
+      contentType,
+    );
+  }
+
   async uploadPublicFavicon(body: Buffer, contentType = 'image/x-icon') {
     return this.uploadObject(`public/favicons/${uuidv4()}.ico`, body, contentType);
   }
