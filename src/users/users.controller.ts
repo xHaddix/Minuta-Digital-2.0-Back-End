@@ -36,6 +36,7 @@ import { RoleCode } from '../common/constants/role.constants';
 import { UsersService } from './users.service';
 import { InviteUserDto } from './dto/invite-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { InviteUserResponseDto } from './dto/invite-user-response.dto';
 
 @ApiTags('Users')
@@ -106,6 +107,19 @@ export class UsersController {
     return this.usersService.findAll(user);
   }
 
+  @Get('me')
+  @Roles(
+    RoleCode.DEV,
+    RoleCode.ORG_ADMIN,
+    RoleCode.COMPLEX_ADMIN,
+    RoleCode.SECURITY,
+    RoleCode.RESIDENT,
+  )
+  @ApiOperation({ summary: 'Obtiene el perfil del usuario autenticado' })
+  findOwnProfile(@CurrentUser() user: JwtPayload) {
+    return this.usersService.findOwnProfile(user);
+  }
+
   @Get(':id')
   @Roles(RoleCode.DEV, RoleCode.ORG_ADMIN, RoleCode.COMPLEX_ADMIN, RoleCode.SECURITY)
   @ApiOperation({ summary: 'Obtiene un usuario por id (dentro del alcance del solicitante)' })
@@ -143,6 +157,25 @@ export class UsersController {
     @Body() dto: InviteUserDto,
   ): Promise<InviteUserResponseDto> {
     return this.usersService.inviteUser(dto, requester);
+  }
+
+  @Patch('me')
+  @Roles(
+    RoleCode.DEV,
+    RoleCode.ORG_ADMIN,
+    RoleCode.COMPLEX_ADMIN,
+    RoleCode.SECURITY,
+    RoleCode.RESIDENT,
+  )
+  @ApiOperation({
+    summary: 'Actualiza datos de perfil editables del usuario autenticado',
+    description: 'Solo permite actualizar nombre, teléfono y documento; el rol y el estado no se pueden cambiar aquí.',
+  })
+  updateOwnProfile(
+    @Body() dto: UpdateOwnProfileDto,
+    @CurrentUser() requester: JwtPayload,
+  ) {
+    return this.usersService.updateOwnProfile(dto, requester);
   }
 
   @Patch(':id')

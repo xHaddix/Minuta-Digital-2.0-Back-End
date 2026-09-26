@@ -11,6 +11,7 @@ import { MailService } from '../mail/mail.service';
 import { UserHierarchyService } from './user-hierarchy.service';
 import { InviteUserDto } from './dto/invite-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { InviteUserResponseDto } from './dto/invite-user-response.dto';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { generateSecureToken, hashToken } from '../common/utils/token.util';
@@ -73,6 +74,31 @@ export class UsersService {
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
     return user;
+  }
+
+  async findOwnProfile(requester: JwtPayload) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: requester.sub },
+      select: USER_PUBLIC_SELECT,
+    });
+
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return user;
+  }
+
+  updateOwnProfile(dto: UpdateOwnProfileDto, requester: JwtPayload) {
+    return this.prisma.user.update({
+      where: { id: requester.sub },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name.trim() }),
+        ...(dto.phone !== undefined && { phone: dto.phone?.trim() ?? null }),
+        ...(dto.documentTypeId !== undefined && { documentTypeId: dto.documentTypeId }),
+        ...(dto.documentNumber !== undefined && {
+          documentNumber: dto.documentNumber?.trim() ?? null,
+        }),
+      },
+      select: USER_PUBLIC_SELECT,
+    });
   }
 
   async updateProfileImage(requester: JwtPayload, id: string, imgProfile: string) {
