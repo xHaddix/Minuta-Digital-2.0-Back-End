@@ -181,7 +181,9 @@ model User {
   password   String?  @map("password")
   name       String   @map("name")
   phone      String?  @map("phone")
-  status     Int      @default(2) @map("status") // 2 = Pendiente activación, 1 = Activo, 0 = Inactivo
+  status     Int      @default(2) @map("status") // 2 = Pending activation, 1 = Active, 0 = Inactive
+  dataTreatmentAcceptedAt DateTime? @map("data_treatment_accepted_at")
+  dataTreatmentVersion    String?   @map("data_treatment_version") // 2 = Pendiente activación, 1 = Activo, 0 = Inactivo
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 

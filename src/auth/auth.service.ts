@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { DATA_TREATMENT_POLICY_VERSION } from './data-treatment-policy';
 import { ActivateAccountDto } from './dto/activate-account.dto';
 import { ActivateAccountResponseDto } from './dto/activate-account-response.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -85,8 +86,32 @@ export class AuthService {
         roleName: user.role.name,
         organizationId: user.organizationId,
         residentialComplexId: user.residentialComplexId,
+        dataTreatmentAcceptedAt: user.dataTreatmentAcceptedAt,
+        dataTreatmentVersion: user.dataTreatmentVersion,
       },
       permissions,
+      dataTreatmentPolicyVersion: DATA_TREATMENT_POLICY_VERSION,
+    };
+  }
+
+  async recordDataTreatmentConsent(currentUser: JwtPayload, version: string) {
+    if (version !== DATA_TREATMENT_POLICY_VERSION) {
+      throw new BadRequestException('La version de la politica ya no esta vigente');
+    }
+
+    const acceptedAt = new Date();
+    await this.prisma.user.update({
+      where: { id: currentUser.sub },
+      data: {
+        dataTreatmentAcceptedAt: acceptedAt,
+        dataTreatmentVersion: version,
+      },
+    });
+
+    return {
+      acceptedAt: acceptedAt.toISOString(),
+      version,
+      policyVersion: DATA_TREATMENT_POLICY_VERSION,
     };
   }
 
@@ -128,8 +153,11 @@ export class AuthService {
         roleName: user.role.name,
         organizationId: complex.organizationId,
         residentialComplexId: complex.id,
+        dataTreatmentAcceptedAt: user.dataTreatmentAcceptedAt,
+        dataTreatmentVersion: user.dataTreatmentVersion,
       },
       permissions,
+      dataTreatmentPolicyVersion: DATA_TREATMENT_POLICY_VERSION,
     };
   }
 

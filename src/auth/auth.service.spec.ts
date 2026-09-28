@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import bcrypt = require('bcrypt');
 import { AuthService } from './auth.service';
+import { DATA_TREATMENT_POLICY_VERSION } from './data-treatment-policy';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { MailService } from '../mail/mail.service';
 import { hashToken } from '../common/utils/token.util';
@@ -134,6 +135,32 @@ describe('AuthService (QA funcional)', () => {
         expect.objectContaining({ sub: 'user-1' }),
         { expiresIn: '30d' },
       );
+    });
+
+    it('registra la version y la fecha de aceptacion del tratamiento', async () => {
+      prisma.user.update.mockResolvedValue({ id: 'user-1' });
+
+      const result = await service.recordDataTreatmentConsent(
+        { sub: 'user-1' } as any,
+        DATA_TREATMENT_POLICY_VERSION,
+      );
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: {
+          dataTreatmentAcceptedAt: expect.any(Date),
+          dataTreatmentVersion: DATA_TREATMENT_POLICY_VERSION,
+        },
+      });
+      expect(result.version).toBe(DATA_TREATMENT_POLICY_VERSION);
+      expect(result.policyVersion).toBe(DATA_TREATMENT_POLICY_VERSION);
+    });
+
+    it('rechaza una version vencida sin guardar la aceptacion', async () => {
+      await expect(
+        service.recordDataTreatmentConsent({ sub: 'user-1' } as any, 'v0'),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
     it('debe rechazar con 401 si el usuario no existe (sin revelar la causa)', async () => {

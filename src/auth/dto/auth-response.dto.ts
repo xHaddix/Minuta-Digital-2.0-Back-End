@@ -10,10 +10,13 @@ class AuthUserDto {
   @ApiProperty({ description: 'Nombre legible del rol' }) roleName!: string;
   @ApiProperty({ nullable: true }) organizationId!: string | null;
   @ApiProperty({ nullable: true }) residentialComplexId!: string | null;
+  @ApiProperty({ nullable: true }) dataTreatmentAcceptedAt!: Date | null;
+  @ApiProperty({ nullable: true }) dataTreatmentVersion!: string | null;
 }
 
 export class AuthResponseDto {
   @ApiProperty() accessToken!: string;
   @ApiProperty({ type: AuthUserDto }) user!: AuthUserDto;
   @ApiProperty({ type: [String] }) permissions!: string[];
+  @ApiProperty({ example: '2026-09-28-v1' }) dataTreatmentPolicyVersion!: string;
 }

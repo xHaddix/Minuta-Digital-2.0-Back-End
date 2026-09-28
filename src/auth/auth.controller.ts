@@ -10,6 +10,7 @@ import { ForgotPasswordResponseDto } from './dto/forgot-password-response.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ResetPasswordResponseDto } from './dto/reset-password-response.dto';
 import { SwitchComplexDto } from './dto/switch-complex.dto';
+import { RecordDataTreatmentConsentDto } from './dto/record-data-treatment-consent.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -31,6 +32,18 @@ export class AuthController {
   })
   async login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(dto);
+  }
+
+  @Post('data-treatment-consent')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Registra la aceptacion de la politica de tratamiento de datos' })
+  async recordDataTreatmentConsent(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: RecordDataTreatmentConsentDto,
+  ) {
+    return this.authService.recordDataTreatmentConsent(user, dto.version);
   }
 
   @Post('switch-complex')

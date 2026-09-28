@@ -1,0 +1,1 @@
+export const DATA_TREATMENT_POLICY_VERSION = '2026-09-28-v1';
