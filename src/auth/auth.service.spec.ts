@@ -115,6 +115,27 @@ describe('AuthService (QA funcional)', () => {
       });
     });
 
+    it('debe emitir un token de 30 dias cuando Recordarme esta activo', async () => {
+      const hashed = await bcrypt.hash(dto.password, 4);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: dto.email,
+        password: hashed,
+        name: 'Admin',
+        status: UserStatus.ACTIVE,
+        organizationId: 'org-1',
+        residentialComplexId: 'complex-1',
+        role: { code: 'ROLE_ORG_ADMIN', name: 'Administrador' },
+      });
+
+      await service.login({ ...dto, rememberMe: true } as any);
+
+      expect(jwtService.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ sub: 'user-1' }),
+        { expiresIn: '30d' },
+      );
+    });
+
     it('debe rechazar con 401 si el usuario no existe (sin revelar la causa)', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
 

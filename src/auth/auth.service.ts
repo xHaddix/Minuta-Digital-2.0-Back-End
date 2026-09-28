@@ -69,7 +69,9 @@ export class AuthService {
       residentialComplexId: user.residentialComplexId,
     };
 
-    const accessToken = await this.jwtService.signAsync(payload);
+    const accessToken = dto.rememberMe
+      ? await this.jwtService.signAsync(payload, { expiresIn: '30d' })
+      : await this.jwtService.signAsync(payload);
     const permissions = await this.getPermissions(user.role.code);
 
     return {
